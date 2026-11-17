@@ -163,6 +163,8 @@ donkey createcar --path ~/mycar
 ### ⚠️ 주행 프로그램에서 카메라 오류 (2026-11-17)
 - `python manage.py drive` 실행 시 `Failed to queue buffer ... Remote I/O error`가 반복되며 프로그램이 멈춤
 - 카메라 자체는 인식됨(`Camera now open`). **리본 케이블이 느슨한 것**이 가장 의심됨 (차에 조립하며 움직였음)
+- 의심 순서: ① 리본 케이블 ② 전원 불안정(저전압) ③ 다른 프로세스가 카메라를 잡고 있음 ④ 클론 모듈/스트림 구성 호환
+- 진단 명령: `vcgencmd get_throttled`(0x0이면 정상), `ps aux | grep -E "rpicam|libcamera|python"`, `dmesg | grep -i -E "imx219|csi|cfe|rp1|under-voltage"`
 - 확인 순서: Pi 종료 → USB-C 뽑기 → **CAM0 포트와 카메라 쪽 케이블을 끝까지 다시 꽂고** 잠금 탭 닫기(꺾이지 않게)
   → Pi 켜기 → `rpicam-hello --list-cameras` → `rpicam-jpeg -o ~/test.jpg`
 - 단독 촬영에서도 같은 에러면 케이블 교체/카메라 점검. 단독 촬영이 되면 주행 프로그램을 다시 실행
