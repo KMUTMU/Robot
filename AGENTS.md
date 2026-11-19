@@ -282,6 +282,8 @@ venv 경로: `~/env/lib/python3.13/site-packages/donkeycar/`
 | 추론 엔진 | TensorFlow/TFLite **미설치** (Python 3.13 + aarch64에서 TF 지원 지연 때문으로 추정) → 자율주행 직전에 TFLite 런타임 등으로 해결 |
 | PC | Windows 11 Pro, RTX 5060 Laptop GPU. 학습 환경 미설치. 네이티브 Windows용 TF GPU는 2.10이 마지막이라 **WSL2(Ubuntu)** 권장, RTX 50 시리즈는 최신 CUDA/프레임워크 호환 확인 필요 |
 | 원격 저장소 | https://github.com/KMUTMU/Robot.git, 브랜치 `main` (사용자가 `main`에 바로 커밋·푸시하길 원함) |
+| 작업 폴더 (사용자 PC) | `C:\Users\JOONYOUNG PARK\OneDrive - KookminUNIV\바탕 화면\Robot` (git 클론). 사용자가 사진을 여기에 넣음. **이 폴더를 항상 GitHub 최신 상태로 유지**할 것 |
+| 동기화 방법 (11-19~) | PC 폴더의 git에는 GitHub 로그인 정보가 없어 푸시 불가 → 에이전트는 클라우드 쪽 클론에서 커밋·푸시하고, PC 폴더에서 `git fetch` + `git merge --ff-only origin/main`으로 받음. PC 폴더에 새로 넣은 사진은 가져와서 커밋·푸시한 뒤 다시 받음. PC 폴더 git 사용에는 삭제 권한이 필요(잠금 파일). 11-19에 줄바꿈(CRLF)만 다른 변경을 `git stash`로 백업해 둠 (`stash@{0}`, 내용 차이 없음) |
 
 ## 9. 저장소 파일 안내
 
