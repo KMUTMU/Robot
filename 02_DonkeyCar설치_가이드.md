@@ -160,17 +160,35 @@ donkey createcar --path ~/mycar
 - 지원 모드: 640x480@200fps, 1640x1232@81fps, 1920x1080@47fps, 3280x2464@21fps
   (DonkeyCar 기본 160x120은 이 중 640x480을 줄여 사용)
 
-### ⚠️ 주행 프로그램에서 카메라 오류 (2026-11-17)
-- `python manage.py drive` 실행 시 `Failed to queue buffer ... Remote I/O error`가 반복되며 프로그램이 멈춤
-- 카메라 자체는 인식됨(`Camera now open`). **리본 케이블이 느슨한 것**이 가장 의심됨 (차에 조립하며 움직였음)
-- 의심 순서: ① 리본 케이블 ② 전원 불안정(저전압) ③ 다른 프로세스가 카메라를 잡고 있음 ④ 클론 모듈/스트림 구성 호환
-- 진단 명령: `vcgencmd get_throttled`(0x0이면 정상), `ps aux | grep -E "rpicam|libcamera|python"`, `dmesg | grep -i -E "imx219|csi|cfe|rp1|under-voltage"`
-- 확인 순서: Pi 종료 → USB-C 뽑기 → **CAM0 포트와 카메라 쪽 케이블을 끝까지 다시 꽂고** 잠금 탭 닫기(꺾이지 않게)
-  → Pi 켜기 → `rpicam-hello --list-cameras` → `rpicam-jpeg -o ~/test.jpg`
-- 단독 촬영에서도 같은 에러면 케이블 교체/카메라 점검. 단독 촬영이 되면 주행 프로그램을 다시 실행
-- (참고) Pi 접속이 자주 끊김: 끊길 때 초록 LED가 꺼졌다 켜지면 전원 문제(충전기 교체), 계속 깜박이면 WiFi 문제
+### ✅ 주행 프로그램에서 카메라 오류 (2026-11-17 발생 → 11-18 정상)
+- 11-17: `python manage.py drive` 실행 시 `Failed to queue buffer ... Remote I/O error`가 반복되며 프로그램이 멈춤
+- 11-18: `rpicam-hello --list-cameras`(imx219 인식), `rpicam-hello -t 5000 -n`(5초 연속 영상) 정상 → `drive`도 `PiCamera ready.` → `Starting vehicle at 20 Hz`까지 정상. 케이블 재장착은 하지 않아서 **원인은 미확인**
+- 재발하면: ① 리본 케이블 ② 전원 불안정(`vcgencmd get_throttled`가 0x0인지) ③ 다른 프로세스가 카메라를 잡고 있음(`ps aux | grep -E "rpicam|libcamera|python"`) 순으로 확인
+- `drive` 로그의 `pigpio was not imported`, `/dev/input/js0 is missing`(게임패드 미연결)은 무시해도 됨
+
+### ⚠️ 웹 UI에 디자인·영상이 안 나옴 — `static` 폴더 누락 (2026-11-18 해결)
+- 증상: `http://192.168.0.155:8887`이 글자만 보이고 영상 칸이 깨진 그림. `/video`를 열면 `img_placeholder.jpg` `FileNotFoundError`
+- 원인: **DonkeyCar 5.4.0 pip 설치본에 `donkeycar/parts/web_controller/templates/static` 폴더가 빠져 있음** (같은 버전 wheel을 열어서 확인)
+- 해결 (Pi 터미널):
+  ```bash
+  git clone --depth 1 --branch 5.4.0 https://github.com/autorope/donkeycar.git ~/donkeycar-src
+  cp -r ~/donkeycar-src/donkeycar/parts/web_controller/templates/static ~/env/lib/python3.13/site-packages/donkeycar/parts/web_controller/templates/
+  ```
+- DonkeyCar를 다시 설치·업데이트하면 다시 해야 함
+
+### ⚠️ 웹 UI 조종이 안 먹힘 — 게임패드 기본 설정 (2026-11-18)
+- 템플릿 기본값 `USE_JOYSTICK_AS_DEFAULT = True` → 게임패드 부품이 웹 UI 조종 값을 0으로 덮어씀 (로그에 `Adding part XboxOneJoystickController`)
+- 웹 UI로 조종하려면 `myconfig.py`에 `USE_JOYSTICK_AS_DEFAULT = False`. 지금은 게임패드를 쓰므로 `True`
+
+### 🎮 게임패드(MOGA XP5-X Plus) 연결 (2026-11-18~19)
+- 페어링: `bluetoothctl` → `power on` → `agent on` → `default-agent` → `scan on` → 패드 페어링 버튼 3초 → **새로 뜬 주소로** `pair` / `trust` / `connect` → `scan off` → `exit`
+  - 패드의 블루투스 주소가 페어링할 때마다 바뀔 수 있음. 예전 주소로 하면 `ConnectionAttemptFailed`나 `le-connection-abort-by-local`(붙었다 끊김 반복)이 남
+  - 이 과정에서 `/etc/bluetooth/main.conf`에 `ControllerMode = dual`, `JustWorksRepairing = confirm`을 넣도록 안내함 (적용 여부 미확인)
+- 확인: `ls /dev/input/js0`, `sudo apt install -y joystick`, `jstest /dev/input/js0`
+- `CONTROLLER_TYPE = 'xbox'`(기본값) 그대로 맞음. 트리거 방향 버그 수정은 [AGENTS.md](AGENTS.md) 6번
 
 ### 🔍 초점 맞추기 (⬜ 미완료)
+- 웹 UI 영상은 160x120을 확대해서 보여 줘서 원래 조금 뭉개져 보임 → 차를 바닥에 두고 앞쪽 바닥이 보이는지로 판단 예정
 - 첫 테스트 사진이 **많이 흐렸음** → 렌즈 초점이 안 맞은 상태
 - 렌즈 통을 손으로 돌려 **50cm~1m 거리**에 맞추기. 실시간 영상을 보면서 조정:
   ```bash

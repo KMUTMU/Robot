@@ -1,6 +1,6 @@
 # 🤖 AGENTS.md — 이 프로젝트를 이어받는 AI 에이전트를 위한 인수인계 문서
 
-> **가장 먼저 읽을 파일.** 최종 업데이트: 2026-11-17 · 다음 작업: **카메라 점검** (아래 "지금 해야 할 일" 참고)
+> **가장 먼저 읽을 파일.** 최종 업데이트: 2026-11-19 · 다음 작업: **카메라 고정 → 바닥 주행 테스트 → 데이터 수집 준비** (아래 "지금 해야 할 일" 참고)
 > 사람용 요약은 [README.md](README.md), 세부 체크리스트는 [03_RC카개조_체크리스트.md](03_RC카개조_체크리스트.md).
 > 이 문서와 다른 문서가 충돌하면 **이 문서와 03 체크리스트가 가장 최신**이에요. (`준비물_알리.md`의 일부 서술은 구매 당시 기준)
 
@@ -31,61 +31,55 @@
 | Pi 5 OS · SSH · DonkeyCar 5.4.0 · `~/mycar` | ✅ | TensorFlow/TFLite는 **미설치** (자율주행 직전에 설치) |
 | PCA9685 I2C 인식 (0x40) | ✅ | |
 | 조향 서보 (ch0) 보정·동작 | ✅ | 460 / 400 / 340 |
-| 구동 모터 (ESC, ch1) 배선·값 측정·동작 | ✅ | 정지 380 / 앞 350 / 후진 450 |
+| 구동 모터 (ESC, ch1) 배선·값 측정·동작 | ✅ | **11-18 재측정: 정지 380 / 앞 최대 330 / 후진 최대 435** (정지 구간 359~402) |
 | 전원 배선 (스위치·단자대·UBEC) | ✅ | |
-| `myconfig.py` 적용 | ✅ | 단, **실제 주행 프로그램에서의 동작은 미확인** |
-| **카메라 (주행 프로그램 안에서)** | ❌ **오류** | `Remote I/O error`로 `drive`가 멈춤 → **다음 작업** |
-| Pi 접속 안정성 | ⚠️ | 접속이 자주 끊김, 원인 미확인 |
-| 웹 UI 조종 테스트 | ⬜ | 카메라 오류 때문에 미실시 |
-| 게임패드(MOGA XP5-X Plus, 블루투스) | ⬜ | 보유, 페어링 전 |
-| 카메라 초점 | ⬜ | 첫 테스트 사진이 흐렸음 |
-| 부품 차체 고정 · 카메라 위치 고정 | ⬜ | 지금은 느슨하게 놓여 있음 |
+| `myconfig.py` 적용 · 주행 프로그램 동작 | ✅ | 웹 UI와 게임패드로 조향·전진·후진 확인 (바퀴 띄운 상태) |
+| 카메라 (주행 프로그램 안에서) | ✅ | 11-18 재실행 시 정상. 11-17 `Remote I/O error`의 원인은 **미확인** |
+| 웹 UI (`:8887`) | ✅ | pip 설치본에 빠진 `static` 폴더를 복사해 해결 (6번 참고) |
+| 게임패드(MOGA XP5-X Plus, 블루투스) | ✅ | 페어링·`js0` 인식·조종 확인. 트리거 방향 버그 수정 (6번 참고) |
+| Pi 방열팬 | ✅ | 11-18 장착, 동작 확인 |
+| Pi 접속 안정성 | ⚠️ | 이전에 자주 끊김, 원인 미확인 |
+| Pi 전원 | ⚠️ | 지금은 USB-C 충전기. **보조배터리로 바꿀 예정** (후보 확인, 6번 참고) |
+| 카메라 초점 | ⬜ | 웹 영상은 160x120이라 판단 보류, 바닥에 놓고 확인 예정 |
+| 부품 차체 고정 · 카메라 위치 고정 | ⬜ | 카메라는 차 앞 검은 판 가운데에 세울 계획 (4번) |
+| 바닥 주행 테스트 | ⬜ | |
 | 데이터 수집 / 학습 / 자율주행 | ⬜ | |
 | PC 학습 환경 | ⬜ | Windows 11 Pro, RTX 5060 Laptop, Python 미설치 |
 
-## 4. 지금 해야 할 일: 카메라 점검 ⭐
+## 4. 지금 해야 할 일 ⭐
 
-### 증상 (2026-11-17)
-`cd ~/mycar && python manage.py drive` 실행 시 카메라는 열리지만 곧바로 아래 오류가 반복되고 프로그램이 진행되지 못함.
-```
-INFO:picamera2.picamera2:Camera now open.
-... configuring streams: (0) 160x120-BGR888/sRGB (1) 640x480-BGGR_PISP_COMP1/RAW
-INFO:donkeycar.parts.camera:...warming camera
-ERROR V4L2 v4l2_videodevice.cpp:1787 /dev/video4[17:cap]: Failed to queue buffer 0: Remote I/O error
-ERROR RPISTREAM rpi_stream.cpp:267 Failed to queue buffer for CFE Image   (buffer 0~3 모두)
-```
-- 같은 시점에 **Pi 접속(SSH)이 끊겨서** 오류 직후 원인 확인을 못 했음
+### ① 카메라 위치 고정
+- 위치: 차 **앞쪽 검은 판의 맨 앞·가운데** (단자대보다 앞이어야 화면에 선·단자대가 안 찍힘). 바닥에서 10~15cm, 아래로 20~30°
+  - 차 앞뒤 방향은 사진 기준 추정(단자대가 있는 검은 판 = 원래 운전석 쪽). 사용자 확인 전
+- 재료(다이소 등): 폼보드(우드락) + 글루건 + 케이블타이 + 양면 폼테이프. 카메라 기판 모서리 구멍에 케이블타이를 끼워 고정
+- 리본 케이블(30cm)은 날카롭게 접지 말고 차체를 따라 완만하게 눕혀 테이프로 고정
+- 고정한 뒤 웹 화면을 보며 각도 조정 → 화면 아래 절반에 1~2m 앞 바닥이 보이게. 각도를 정하면 사진으로 기록 (각도가 바뀌면 데이터를 다시 모아야 함)
 
-### 알려진 사실
-- `rpicam-hello --list-cameras`는 imx219를 인식했었음 (`dtoverlay=imx219,cam0`을 `/boot/firmware/config.txt`의 `[all]`에 추가한 뒤). 이 줄은 **지우면 안 됨**
-- 첫 테스트 사진(흐렸음)은 찍혔음. 카메라가 인식되던 때는 **차 밖 작업대에 둔 배치**였던 것으로 보임(작업대 사진 `..._01.jpg` 참고) → 이후 짐칸에 올리며 리본 케이블을 움직였을 가능성이 있음 (추정)
-- `rpicam-vid`로 VLC 스트리밍을 설정한 적은 있으나 영상이 제대로 나왔는지는 기록이 없음
+### ② Pi 전원을 보조배터리로 교체
+- 조건: USB-C 출력 **5V⎓3A 이상**, KC 인증, 슬림·가벼운 것. "20W"라고 써 있어도 5V는 2A~2.4A인 제품이 많음 → **상품정보 제공고시의 정격 출력**으로 확인
+- 후보(사용자가 찾음, 조건 충족 확인): 맥세이프형 5000mAh **M-MAG15W-5000** — C포트 5V/3A, KC XU103448-25006, 15cm C-C 케이블 포함, 6.3×9.4×1.5cm, 123g
+- 연결 후 주행 프로그램을 돌리면서 `vcgencmd get_throttled`가 `0x0`인지 확인
+- 공식 충전기가 아니면 Pi가 USB 포트 전류를 600mA로 제한함 → CSI 카메라·블루투스 패드 구성에서는 문제없음
 
-### 가설 (확률이 높은 순, 모두 **미확인**)
-1. **리본 케이블이 느슨하거나 꺾임** (Pi CAM0 쪽·카메라 쪽 양쪽)
-2. **전원 불안정(저전압)**: Pi는 USB-C 충전기로 전원을 받음. 접속이 자주 끊기는 것과 같은 원인일 수 있음. ESC·모터 노이즈가 영향을 줬을 가능성도 있음
-3. 다른 프로세스가 카메라를 잡고 있음 (이전에 `rpicam-vid --listen`으로 VLC 스트리밍을 했었음)
-4. 클론 IMX219 모듈과 DonkeyCar가 요청한 스트림 구성(160x120 + 640x480 RAW) 간 호환 문제
+### ③ 바닥 주행 테스트 → 데이터 수집 준비
+- 트리거 수정 후 **RT에서 손을 뗐을 때 멈추는지** 아직 확인 못 함 → 바퀴 띄운 채 먼저 확인
+- 바퀴를 내리고 낮은 속도로 직진·회전 확인, 카메라 초점 확인
+- 데이터는 **B 버튼**으로 녹화(자동 녹화는 꺼 둠), 실수 구간은 **X**(최근 100장 삭제)
 
-### 권장 점검 순서
-```bash
-# 0) (Pi 터미널) 전원 상태: 0x0이면 정상, 0이 아니면 저전압/과열 기록이 있음
-vcgencmd get_throttled
-# 1) 카메라를 잡고 있는 프로세스가 없는지
-ps aux | grep -E "rpicam|libcamera|python" | grep -v grep
-# 2) 커널 로그에서 카메라·전원 관련 오류
-dmesg | grep -i -E "imx219|csi|cfe|rp1|under-voltage|voltage" | tail -30
-# 3) 카메라 단독 인식 / 촬영
-rpicam-hello --list-cameras
-rpicam-jpeg -o ~/test.jpg
-```
-- **Pi를 끄고**(`sudo shutdown now` → LED 꺼진 뒤 USB-C 분리) CAM0 포트와 카메라 쪽 케이블을 끝까지 다시 꽂고 잠금 탭을 닫은 뒤 위를 재실행
-- `get_throttled`가 0x0이 아니면 **충전기 교체**(5V 3A 이상, 가능하면 Pi 5 정품 5V/5A)부터
-- 단독 촬영이 되는데 `drive`만 안 되면: 먼저 `rpicam-hello -t 5000`(미리보기 없이) 등으로 연속 스트리밍이 되는지 보고, 그다음 `~/mycar/myconfig.py`의 `CAMERA_TYPE`/해상도 설정을 점검
-- 해결되면: `python manage.py drive` → PC 브라우저 `http://192.168.0.155:8887` → 웹 UI 조종 테스트 (7번 안전 절차 준수, **바퀴는 띄운 채로**)
+### 참고: 컴퓨터 없이 쓰기 (안내만 함, 미적용)
+- systemd 서비스(`/etc/systemd/system/donkeycar.service`, `ExecStart=/home/pi/env/bin/python /home/pi/mycar/manage.py drive`)로 부팅 시 자동 실행 가능. DonkeyCar는 게임패드가 연결될 때까지 3초마다 다시 찾으며 기다림
+- 적용하면 직접 `python manage.py drive`를 실행하기 전에 `sudo systemctl stop donkeycar` 필요 (카메라·PCA9685 충돌). 종료는 휴대폰 SSH 앱 등으로 `sudo shutdown now`
 
-### 해결 후 결과를 문서에 기록할 곳
-[02_DonkeyCar설치_가이드.md](02_DonkeyCar설치_가이드.md)의 "주행 프로그램에서 카메라 오류" 항목과 03 체크리스트, 이 문서의 3번 표
+### 해결된 문제 기록 (11-18)
+| 문제 | 원인 | 해결 |
+|---|---|---|
+| `drive`에서 카메라 `Remote I/O error` (11-17) | 미확인 | 11-18에는 `rpicam-hello --list-cameras`, `rpicam-hello -t 5000 -n` 정상 후 `drive`도 정상. 케이블 재장착은 하지 않음 |
+| 웹 UI가 글자만 나오고 영상 칸이 깨짐 | DonkeyCar 5.4.0 **pip 설치본에 `templates/static` 폴더가 없음** (같은 버전 wheel을 열어 확인). `/video`에서 `img_placeholder.jpg` 없음 오류 | GitHub 5.4.0 소스의 `static` 폴더를 site-packages로 복사 (6번) |
+| 웹 UI 키를 눌러도 반응 없음 | 템플릿 기본값 `USE_JOYSTICK_AS_DEFAULT = True` → 게임패드 부품이 웹 값을 0으로 덮어씀 | (당시) `False`로 설정. 지금은 게임패드를 쓰므로 `True` |
+| 웹 UI에서 전진 안 됨, 후진만 됨 | ESC 정지 구간이 359~402로 넓어짐. 기존 앞 최대 350에 50% 제한 → 365로 정지 구간 안 | 재측정 후 앞 최대 330 / 후진 최대 435 |
+| 게임패드 페어링 실패 (`ConnectionAttemptFailed`, 붙었다 끊김 반복) | 패드가 페어링할 때마다 **블루투스 주소가 바뀜**(BLE 랜덤 주소). 예전 주소로 시도했음 (추정) | `scan on` → 새로 뜬 주소로 `pair` → `trust` → `connect`. 이 과정에서 `/etc/bluetooth/main.conf`에 `ControllerMode = dual`, `JustWorksRepairing = confirm` 적용을 안내함 (적용 여부 미확인, 백업 `main.conf.bak`) |
+| 게임패드 50%에서 전진이 덜덜거림 | 50% → 전진 신호 약 355로 모터가 겨우 도는 경계 | RB로 올려 해결, `JOYSTICK_MAX_THROTTLE`을 그 값으로 고정 |
+| RT가 후진, LT가 전진 | **DonkeyCar 버그**: 트리거 값(0~1)에 `JOYSTICK_THROTTLE_DIR = -1.0`이 곱해짐 | `controller.py`의 트리거 매핑을 서로 바꿈 (6번) |
 
 ## 5. 하드웨어 구성 (실제)
 
@@ -93,13 +87,14 @@ rpicam-jpeg -o ~/test.jpg
 | 역할 | 부품 | 비고 |
 |------|------|------|
 | 차 | WPL **C24-1** RTR, 1/16, 4WD, **서보 비례 조향** | 배터리 2S 7.4V 10C 1200mAh × 2 (4핀 SM 계열 커넥터로 추정), 28,450원 |
-| 두뇌 | Raspberry Pi **5 1GB** + 듀얼 쿨러 케이스 | 76,600 + 14,600원 |
+| 두뇌 | Raspberry Pi **5 1GB** + 듀얼 쿨러 케이스 | 76,600 + 14,600원. 11-18 방열팬 연결(동작 확인) |
 | 카메라 | IMX219 8MP 160° (Pi 5용 22핀 케이블) | 15,800원, **CAM0** 포트 |
 | PWM | PCA9685 16채널 (I2C 0x40) | |
 | 모터 구동 | 브러시드 **ESC 30A** (전진 30A·후진 20A·브레이크, 입력 4.8~8.4V, BEC 5.7V) | 11,850원 |
-| 서보 전원 | **UBEC 5V 5A** (실측 출력 약 5.4V, 무부하) | 서보(PCA9685 V+)용으로만 사용 |
+| 서보 전원 | **UBEC 5V 5A** (11-17 무부하 5.4V → 11-18 재측정 5.0~5.1V, 서보 동작 시 순간 4V 중반까지 떨어짐) | 서보(PCA9685 V+)용으로만 사용. **Pi와 같이 쓰면 안 됨** |
 | 전원 분배 | **PCT-213** 레버 단자대 3구 × 10 (5개 사용 중) | 32A/250V, 선 0.2~4.0mm², 피복 10mm |
-| 수동 조종 | 게임패드 **MOGA XP5-X Plus** (블루투스, Xbox 배열) | 집에 있던 것 |
+| 수동 조종 | 게임패드 **MOGA XP5-X Plus** (블루투스, Xbox 배열) | 집에 있던 것. 페어링 완료 |
+| (보유, 미사용) | USB WiFi 안테나 | 모델·칩셋 미확인. Pi 5 Trixie에서 드라이버가 잡히는지 확인 필요 |
 | 기타 | 20AWG 실리콘 선, 서보 연장선 30cm, Y 케이블(배터리 병렬용, 미사용), 센서(HC-SR04P×3, MPU6050, SW-420×2), 공구 | 센서는 아직 미사용 |
 | 보유 | 멀티미터 (다이얼에 200/20/2/200m V⎓, 부저는 `NPN/PNP` 옆 ▶|·))) 위치) | |
 
@@ -115,7 +110,8 @@ Pi 5 ──I2C(핀1 3.3V, 3 SDA, 5 SCL, 6 GND)──> PCA9685 (0x40)
 PCA9685 ch0 ─ 조향 서보 (3핀: 흰=PWM, 빨강=V+, 검정=GND)
 PCA9685 ch1 ─ ESC 3핀 (흰=PWM, 검정=GND, **빨강은 가운데를 잘라 양쪽 끝 절연**)
 PCA9685 초록 단자(V+/GND) ← UBEC 출력 (서보 전원)
-Pi 5 전원 ← USB-C 충전기 (UBEC 5.4V는 Pi에 약간 높아서 연결 안 함)
+Pi 5 전원 ← USB-C 충전기 (5V 3A 이상) → 보조배터리로 교체 예정
+           (UBEC는 서보 동작 시 4V 중반까지 떨어져서 Pi에 쓰지 않음. 배터리로만 돌리려면 Pi 전용 강압 모듈/UBEC를 따로 달 것)
 카메라 ── CSI 22핀 ── Pi CAM0
 ```
 **전원·모터 (단자대 A~E):**
@@ -145,16 +141,24 @@ ESC 판매 페이지 설명은 "**짧은 쌍 = 배터리, 긴 쌍 = 모터**"였
 ## 6. 값과 설정
 
 ### ESC (PCA9685 60Hz 기준 PWM 값, `donkey calibrate --channel 1 --bus=1`로 측정)
+**11-18 재측정 (현재 사용).** 11-17 값과 달라졌음 (ESC가 켜질 때 정지로 기억한 값이 달랐을 가능성, 원인 미확인)
+
 | 항목 | 값 | 설명 |
 |---|---:|---|
-| 정지 | **380** | |
-| 출발 | 379 | 아주 천천히 움직임 |
-| 보통 | 370 | |
-| 앞으로 사용 최대 | **350** | 꽤 빠름. 330 이하는 거의 최대라 의미 없음 |
-| 후진 시작 | 425 | 385~420은 브레이크 구간(안 움직임) |
-| 후진 사용 최대 | **450** | |
+| 앞으로 사용 최대 | **330** | 빠름 |
+| 앞 빠르게 | 340 | |
+| 앞 천천히 | 350 | |
+| 앞 매우 느리게 | 359 | 전진 시작 |
+| **정지 구간** | 360~402 | 이 사이는 안 움직임 |
+| 정지 | **380** | 정지 구간의 가운데라 그대로 사용 |
+| 후진 매우 느리게 | 403 | 후진 시작 |
+| 후진 천천히 | 410 | |
+| 후진 빠르게 | 420 | |
+| 후진 사용 최대 | **435** | |
 
-- **앞으로 갈 때 숫자가 작아짐** (일반적인 경우와 반대)
+- 11-17 측정값(참고): 정지 380 / 출발 379 / 보통 370 / 앞 최대 350 / 후진 시작 425 / 후진 최대 450
+- **앞으로 갈 때 숫자가 작아짐** (일반적인 경우와 반대). DonkeyCar에서 `FORWARD(330) < STOPPED(380)` 구성으로 **전진이 정상 동작함을 확인** (`PWM_THROTTLE_INVERTED` 불필요)
+- 정지 구간이 넓어서 **최대 속도 제한이 낮으면 전진 신호가 정지 구간 경계에 머물러 덜덜거림** (게임패드 50%에서 겪음)
 - ESC는 **켜질 때 받은 신호를 정지로 기억**함 → 정지값(380)이 나가는 상태에서 켤 것. 프로그램이 정지 신호를 내보내고 있는 동안에 배터리를 꽂고 스위치를 ON
 - PCA9685는 프로그램을 종료해도 **마지막 신호를 계속 출력**함 → 끝낼 때는 정지값으로 돌려놓고 종료
 - 배터리가 약하면 ESC가 **삐 소리 + 빨간불 깜박임**, 모터는 달달달 떨리며 안 돎 (실제로 겪음. 충전된 배터리로 바꾸니 해결)
@@ -174,15 +178,60 @@ PWM_STEERING_THROTTLE = {
     "PWM_THROTTLE_INVERTED": False,
     "STEERING_LEFT_PWM": 460,
     "STEERING_RIGHT_PWM": 340,
-    "THROTTLE_FORWARD_PWM": 350,
+    "THROTTLE_FORWARD_PWM": 330,   # 11-18: 350 → 330
     "THROTTLE_STOPPED_PWM": 380,
-    "THROTTLE_REVERSE_PWM": 450,
+    "THROTTLE_REVERSE_PWM": 435,   # 11-18: 450 → 435
 }
+# 11-18 이후 파일 맨 아래에 echo로 추가한 줄
+USE_JOYSTICK_AS_DEFAULT = True     # 한때 False(웹 UI 조종용)로 바꿨다가 게임패드 연결 후 True
+AUTO_RECORD_ON_THROTTLE = False    # 스로틀을 넣으면 자동 녹화되는 기본 동작 끔 → B 버튼으로 녹화
+JOYSTICK_MAX_THROTTLE = ...        # 50%(0.5)에서 전진이 덜덜거려 RB로 올린 값으로 고정. 정확한 값은 Pi의 파일 확인
 ```
 - DonkeyCar 템플릿 기본값은 조향 `.1`, 구동 `.0`으로 **우리 배선과 반대**라서 위처럼 바꿈
-- 파일의 나머지 항목은 전부 `#` 주석(기본값). `USE_JOYSTICK_AS_DEFAULT`, `CONTROLLER_TYPE`(블루투스 패드용 `"xbox"` 시도 예정)도 아직 주석 상태
-- ⚠️ **`FORWARD(350) < STOPPED(380)` 구성이 DonkeyCar 주행에서 의도대로(앞으로 = 전진) 동작하는지는 아직 실제로 확인하지 못했음.** 웹 UI 조종 시 `i`(앞)이 정말 앞으로 가는지, 최대 속도가 과하지 않은지 먼저 확인. 반대로 가면 `PWM_THROTTLE_INVERTED` 또는 값을 조정
-- 수집·주행 시 **최대 속도를 낮출 것** (350은 실내에서 빠름). 웹 UI의 Max Throttle 50%에서 시작
+- `CONTROLLER_TYPE`은 템플릿 기본값 `'xbox'` 그대로 사용 (MOGA XP5-X Plus와 맞음: jstest 기준 왼쪽 스틱 축 0·1, 오른쪽 스틱 축 2·3, A = 버튼 0)
+- `USE_JOYSTICK_AS_DEFAULT = True`이면 **웹 UI 조종은 무시됨** (게임패드가 없어도 웹 값을 0으로 덮어씀). 웹으로 조종하려면 `False`
+- 스로틀 값 변경 명령(참고):
+  `sed -i 's/"THROTTLE_FORWARD_PWM": *[0-9]*/"THROTTLE_FORWARD_PWM": 330/; s/"THROTTLE_REVERSE_PWM": *[0-9]*/"THROTTLE_REVERSE_PWM": 435/' ~/mycar/myconfig.py`
+
+### ⚠️ DonkeyCar 설치 파일을 직접 고친 것 (재설치·업데이트하면 사라짐)
+venv 경로: `~/env/lib/python3.13/site-packages/donkeycar/`
+1. **웹 UI `static` 폴더 추가** — pip 설치본(5.4.0)에 `parts/web_controller/templates/static`이 빠져 있음
+   ```bash
+   git clone --depth 1 --branch 5.4.0 https://github.com/autorope/donkeycar.git ~/donkeycar-src
+   cp -r ~/donkeycar-src/donkeycar/parts/web_controller/templates/static ~/env/lib/python3.13/site-packages/donkeycar/parts/web_controller/templates/
+   ```
+2. **게임패드 트리거 방향 수정** — `parts/controller.py`의 `XboxOneJoystickController`에서 트리거를 0~1로 바꾼 뒤 `set_throttle`이 `JOYSTICK_THROTTLE_DIR(-1)`을 곱해서 RT=후진, LT=전진이 됨 → 두 줄을 서로 바꿈 (백업 `controller.py.bak`)
+   ```bash
+   F=~/env/lib/python3.13/site-packages/donkeycar/parts/controller.py
+   cp $F $F.bak
+   sed -i "s/'right_trigger': self.magnitude(),/'right_trigger': self.magnitude(reversed = True),/; s/'left_trigger': self.magnitude(reversed = True),/'left_trigger': self.magnitude(),/" $F
+   ```
+   - 결과: RT = 전진, LT = 후진. **트리거에서 손을 뗐을 때 멈추는지는 미확인**
+
+### 게임패드 (MOGA XP5-X Plus)
+- 페어링: `bluetoothctl` → `scan on` → 패드 페어링 버튼 3초(불빛 빠르게 깜박) → 새로 뜬 주소로 `pair` / `trust` / `connect`
+  - **주소가 페어링할 때마다 바뀔 수 있음** (11-18 페어링 주소: `C1:7A:18:C2:BF:73`). 처음 보인 주소는 `CA:2F:22:95:CB:56`이었음
+  - `trust`를 해 두어서 패드를 켜면 자동으로 다시 붙음. 안 붙으면 `bluetoothctl connect <주소>`
+- 확인: `ls /dev/input/js0`, `jstest /dev/input/js0` (`sudo apt install -y joystick`)
+- 버튼 (DonkeyCar 5.4.0 코드 기준)
+
+| 입력 | 기능 |
+|---|---|
+| 왼쪽 스틱 좌우 | 조향 |
+| 오른쪽 스틱 위아래 | 속도 (위 = 전진) |
+| RT / LT | 전진 / 후진 (위 수정 후) |
+| RB / LB | 최대 속도 +0.01 / −0.01 (터미널에 `throttle_scale:` 출력, 재시작하면 `JOYSTICK_MAX_THROTTLE`로 돌아감) |
+| Y | 비상 정지 (모드를 `user`로, 녹화·일정 속도 주행 끔) |
+| B | 녹화 켜기/끄기 |
+| X | 최근 기록 삭제 (기본 100장 ≈ 5초) |
+| Options | 일정 속도 주행 켜기/끄기 (**실수로 누르면 차가 혼자 출발**) |
+| A | 모드 `user` → `local_angle`(AI 조향) → `local`(AI 전부) |
+| R2 | AI 출발 가속 (`AI_LAUNCH_*` 기본 0이라 지금은 효과 없음) |
+
+### Pi 전원 관련 측정 (11-18)
+- `vcgencmd measure_temp`, `vcgencmd get_throttled`(0x0 정상)로 확인
+- 공식 5A 전원이 아니면 USB 포트 합계 600mA로 제한됨. 필요하면 `/boot/firmware/config.txt`의 `[all]`에 `usb_max_current_enable=1` (전원이 감당할 때만)
+- 차 배터리 직결 불가(7.4~8.4V). 강압 모듈을 쓰려면 **입력 최저 6V 이하** 제품이어야 함 (대부분 8~9V 이상 요구)
 
 ## 7. 안전 절차 (사용자에게 항상 상기시킬 것)
 - 선을 만지거나 자르거나 끼울 때는 **차 스위치 OFF + 배터리 분리** 상태에서
@@ -193,6 +242,7 @@ PWM_STEERING_THROTTLE = {
 - ESC 입력 상한 **8.4V** = 2S 완충 전압 → 완충 직후 전압을 멀티미터(20V DC)로 한 번 확인
 - 배터리 2개 병렬(Y 케이블)은 **두 전압이 같을 때만**. 아직 사용하지 않음
 - Pi를 그냥 뽑지 말 것 (SD카드 손상)
+- 게임패드: 이상하면 **Y(비상 정지)**. Options를 누르면 차가 혼자 출발하니 주의. 첫 테스트·설정 변경 후에는 바퀴를 띄운 채로
 
 ## 8. 소프트웨어 / 네트워크 정보
 
@@ -205,7 +255,8 @@ PWM_STEERING_THROTTLE = {
 | DonkeyCar | 5.4.0 (`donkeycar[pi]`), 프로젝트 `~/mycar` |
 | 카메라 설정 | `/boot/firmware/config.txt` `[all]` 아래 `dtoverlay=imx219,cam0` (**삭제 금지**) |
 | 카메라 스택 | libcamera v0.7.2, picamera2 |
-| 웹 UI | `python manage.py drive` 후 `http://192.168.0.155:8887` |
+| 웹 UI | `python manage.py drive` 후 `http://192.168.0.155:8887` (`static` 폴더 복사 필요, 6번) |
+| 블루투스 | `/etc/bluetooth/main.conf`에 `ControllerMode = dual`, `JustWorksRepairing = confirm` 적용을 안내함 (적용 여부 미확인, 백업 `main.conf.bak`) |
 | 추론 엔진 | TensorFlow/TFLite **미설치** (Python 3.13 + aarch64에서 TF 지원 지연 때문으로 추정) → 자율주행 직전에 TFLite 런타임 등으로 해결 |
 | PC | Windows 11 Pro, RTX 5060 Laptop GPU. 학습 환경 미설치. 네이티브 Windows용 TF GPU는 2.10이 마지막이라 **WSL2(Ubuntu)** 권장, RTX 50 시리즈는 최신 CUDA/프레임워크 호환 확인 필요 |
 | 원격 저장소 | https://github.com/KMUTMU/Robot.git, 브랜치 `main` (사용자가 `main`에 바로 커밋·푸시하길 원함) |
@@ -251,17 +302,22 @@ PWM_STEERING_THROTTLE = {
 | 11-09 | 카메라 인식(`dtoverlay`), 차 분해·보드 분석(일체형 확인), 서보 보정, 순정 보드로 주행 재확인 |
 | 11-16 | 개조용 부품 도착. 문서 전체 최신화, 발표 자료 작성, git 정리(변신 로봇 파일 삭제 후 `main` 푸시) |
 | 11-16~17 | 스위치 경로 확인, 단자대 A~E 배선, UBEC 5.4V 확인, ESC 신호 ch1. **ESC 선 반대 연결을 발견·수정**. 배터리 방전으로 인한 ESC 경고를 겪고 교체 후 해결. ESC 값 측정, `myconfig.py` 적용. 주행 프로그램 실행 중 **카메라 오류**로 중단 |
-| 11-17 | 문서·AGENTS.md 정리 후 푸시. **다음: 카메라 점검** |
+| 11-17 | 문서·AGENTS.md 정리 후 푸시 |
+| 11-18 | 카메라 단독·연속 촬영 정상 → `drive` 정상(원인 미확인). 웹 UI `static` 폴더 누락 발견·복사. `USE_JOYSTICK_AS_DEFAULT` 문제 해결. **ESC 재측정(정지 구간 359~402) → 앞 330 / 정지 380 / 후진 435** → 웹 UI로 조향·전진·후진 확인. Pi 방열팬 장착. UBEC 재측정(5.0~5.1V, 서보 동작 시 4V 중반) → Pi 전원과 분리 결정, 보조배터리 검토 |
+| 11-18~19 | 게임패드 MOGA XP5-X Plus 블루투스 페어링(주소가 바뀌는 문제), `js0`·jstest 확인, 게임패드로 주행 확인. 50%에서 전진이 덜덜거려 `JOYSTICK_MAX_THROTTLE` 상향. RT/LT 방향 버그를 `controller.py` 수정으로 해결. `AUTO_RECORD_ON_THROTTLE = False`. 보조배터리 후보(M-MAG15W-5000) 확인. 문서 갱신 후 푸시 |
 
 ## 11. 열린 질문 / 미확인 항목
-- 카메라 오류의 원인 (케이블 / 전원 / 프로세스 점유 / 호환)
-- Pi 접속이 끊기는 원인 (WiFi vs 저전압 재부팅)
-- `forward < stopped` throttle 구성의 실제 주행 동작과 적정 최대 속도
+- 11-17 카메라 `Remote I/O error`의 원인 (11-18에는 재발 안 함. 재발하면 케이블 → 전원 → 프로세스 점유 순으로 확인)
+- Pi 접속이 끊기는 원인 (WiFi vs 저전압 재부팅). 보조배터리·USB WiFi 안테나로 바꾼 뒤 재발 여부로 구분 가능
+- ESC 값이 11-17과 11-18에 달랐던 이유
+- `JOYSTICK_MAX_THROTTLE`의 정확한 값, 데이터 수집에 알맞은 속도
+- 트리거 수정 후 RT에서 손을 뗐을 때 멈추는지
+- 카메라 초점 (160x120 영상으로는 판단 보류) / 자홍색 색감
+- 차의 앞뒤 방향 확인 (사진상 단자대가 있는 검은 판 쪽이 앞으로 추정)
+- 보조배터리를 맥세이프형으로 쓸 때 자석이 차체 금속에 붙는지, 전원 버튼을 눌러야 출력되는지
+- USB WiFi 안테나의 칩셋과 드라이버
 - 처음 ESC를 반대로 연결했던 것이 ESC·모터에 남긴 영향 (현재는 정상 동작)
-- UBEC 출력을 부하 상태에서 재면 몇 V인지 (5.4V는 무부하 측정, Pi에 연결할 수 있을지 판단 필요)
-- Pi를 차 배터리로 구동할지(5.1V 정도로 낮추는 부품 필요) 아니면 보조배터리/USB-C 유지할지
 - 배터리 4핀 커넥터 규격과 Y 케이블 호환 (병렬 사용을 하려면 확인)
-- 게임패드 `CONTROLLER_TYPE = "xbox"`가 MOGA XP5-X Plus에 맞는지 (안 맞으면 `donkey createjs`)
 - ESC의 검은 캡 달린 굵은 빨강 선의 용도
 
 ## 12. 문서 갱신 규칙 (에이전트에게)
