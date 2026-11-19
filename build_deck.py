@@ -290,9 +290,9 @@ for i, (k, v) in enumerate(cons):
     add_text(s, v, x + 0.15, 5.6, 2.6, 0.7, size=16, bold=True)
 
 # ------------------------------------------------------------------ 3. Timeline
-s = new_slide("진행 순서", "10단계 중 9단계 완료, 주행 프로그램 테스트 중 카메라 오류",
-              "각 단계는 실제 명령 출력이나 사진으로 확인한 결과입니다. ESC와 전원을 배선했고 모터와 서보를 움직여 값을 측정했습니다. "
-              "다음은 주행 프로그램에서 난 카메라 오류를 해결하고 웹 화면으로 조종해 보는 것입니다.")
+s = new_slide("진행 순서", "10단계 완료: 주행 프로그램에서 웹 화면과 게임패드로 조종 확인",
+              "각 단계는 실제 명령 출력이나 사진으로 확인한 결과입니다. 주행 프로그램을 실행해 카메라 영상을 웹 화면으로 확인했고, "
+              "웹 화면과 게임패드로 조향·전진·후진을 바퀴를 띄운 채 확인했습니다. 다음은 카메라 고정과 바닥 주행입니다.")
 items = [
     ("주제 전환", "변신 로봇에서\n자율주행 RC카로", "done"),
     ("플랫폼·부품 선정", "예산 내 후보를\n비교해 확정", "done"),
@@ -302,8 +302,8 @@ items = [
     ("카메라 인식", "IMX219 overlay 적용", "done"),
     ("차량 분해·분석", "수신/구동 보드가\n일체형임을 확인", "done"),
     ("서보 보정", "340 / 400 / 460", "done"),
-    ("ESC·전원 배선", "단자대로 전원 분배,\nESC 값 측정(380/350)", "done"),
-    ("주행 테스트", "카메라 케이블 점검,\n웹 UI로 조종", "now"),
+    ("ESC·전원 배선", "단자대로 전원 분배,\nESC 값 측정(330/380/435)", "done"),
+    ("주행 테스트", "웹 화면·게임패드로\n조향·전진·후진 확인", "done"),
 ]
 colors = {"done": TEAL, "now": ORANGE, "todo": RGBColor(0x9A, 0xA5, 0xB1)}
 labels = {"done": "완료", "now": "다음", "todo": "예정"}
@@ -339,7 +339,7 @@ node(4.0, 1.6, 2.7, 0.95, "카메라 IMX219", "8MP · 160° · CSI")
 node(4.0, 3.2, 2.7, 1.4, "Raspberry Pi 5", "DonkeyCar 5.4.0\nPython 3.13", fill=NAVY, line=NAVY, tcolor=WHITE)
 node(7.9, 3.2, 2.4, 1.4, "PCA9685", "16ch PWM (I2C 0x40)", fill=WHITE, line=TEAL)
 node(10.9, 1.75, 2.1, 0.95, "조향 서보", "ch0 (보정 완료)", fill=WHITE, line=TEAL)
-node(10.9, 3.35, 2.1, 0.95, "ESC", "ch1 (설치·측정 완료)", fill=WHITE, line=ORANGE)
+node(10.9, 3.35, 2.1, 0.95, "ESC", "ch1 (동작 확인)", fill=WHITE, line=ORANGE)
 node(10.9, 4.7, 2.1, 0.9, "구동 모터", "브러시드 DC", fill=WHITE, line=ORANGE)
 arrow(s, 5.35, 2.55, 5.35, 3.2, color=GRAY, label="MIPI CSI", lx=0.75, ly=0.12, lw=1.2)
 arrow(s, 6.7, 3.9, 7.9, 3.9, color=TEAL, label="I2C (SDA/SCL)", ly=0.0, lw=1.5)
@@ -347,13 +347,15 @@ arrow(s, 10.3, 3.55, 10.9, 2.35, color=TEAL, label="ch0", lx=-0.12, ly=-0.12, lw
 arrow(s, 10.3, 3.9, 10.9, 3.85, color=ORANGE, label="ch1", lx=-0.05, ly=-0.30, lw=0.6)
 arrow(s, 11.95, 4.3, 11.95, 4.7, color=ORANGE)
 arrow(s, 3.0, 2.8, 4.1, 3.4, color=GRAY, both=True, label="WiFi · SSH", lx=-0.7, ly=0.45, lw=1.3)
+node(0.5, 3.75, 2.6, 0.85, "게임패드", "MOGA XP5-X Plus", fill=WHITE, line=TEAL)
+arrow(s, 3.1, 4.2, 4.0, 4.2, color=TEAL, label="블루투스", lx=-0.1, ly=0.05, lw=1.0)
 for i, (c, t) in enumerate([(TEAL, "확인 완료"), (ORANGE, "구동부")]):
-    sq = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.7), Inches(5.0 + i * 0.4), Inches(0.25), Inches(0.25))
+    sq = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.7 + i * 2.2), Inches(5.12), Inches(0.25), Inches(0.25))
     sq.fill.solid()
     sq.fill.fore_color.rgb = c
     sq.line.fill.background()
     sq.shadow.inherit = False
-    add_text(s, t, 1.05, 4.95 + i * 0.4, 2, 0.3, size=13, color=GRAY)
+    add_text(s, t, 1.05 + i * 2.2, 5.07, 2, 0.3, size=13, color=GRAY)
 add_box(s, 0.6, 5.95, 9.9, 0.9, fill=LIGHT)
 add_text(s, ["Pi 5는 PWM을 직접 정밀 출력하기 어렵기 때문에 PCA9685를 I2C로 연결해 서보와 ESC를 구동합니다.",
              "전원 계통은 별도 슬라이드에서 설명합니다."], 0.8, 6.0, 9.6, 0.85, size=13)
@@ -457,9 +459,10 @@ data = [["구분", "항목", "값"],
         ["Pi", "카메라 설정", "dtoverlay=imx219,cam0 (config.txt)"],
         ["Pi", "I2C", "bus 1 활성화, PCA9685 = 0x40"],
         ["Pi", "접속", "SSH, 5GHz WiFi, IP 192.168.0.155 (자동 할당)"],
+        ["Pi", "게임패드", "MOGA XP5-X Plus 블루투스, CONTROLLER_TYPE = xbox, 최대 속도 0.6"],
         ["PC", "학습용", "Windows 11 Pro, RTX 5060 Laptop GPU"],
         ["미설치", "TensorFlow / TFLite", "추론 직전에 설치 예정"]]
-add_table(s, data, 0.6, 1.5, 12.15, [1.1, 3.0, 8.0], row_h=0.52, size=13, first_col_bold=True)
+add_table(s, data, 0.6, 1.5, 12.15, [1.1, 3.0, 8.0], row_h=0.47, size=13, first_col_bold=True)
 add_text(s, "※ IP 주소는 공유기에 따라 바뀔 수 있습니다.", 0.6, 6.4, 8, 0.3, size=11, color=GRAY)
 
 # ------------------------------------------------------------------ 10. Assembly top view
@@ -555,13 +558,14 @@ data = [["항목", "결과"],
         ["카메라", "imx219 3280×2464 인식"],
         ["서보 동작", "채널 0에서 좌우 구동, 보정 완료"],
         ["순정 주행", "분해·보정 후 기존 보드로 조향·구동 정상"],
-        ["Pi 온도", "유휴 42.2°C"]]
-add_table(s, data, 6.95, 1.55, 5.85, [1.5, 3.8], row_h=0.48, size=13, first_col_bold=True)
-add_box(s, 6.95, 4.55, 5.85, 1.4, fill=WHITE, line=ORANGE)
-add_text(s, "남은 점검", 7.15, 4.62, 3, 0.4, size=15, bold=True, color=ORANGE)
-add_text(s, ["• 카메라 초점: 첫 촬영 사진이 흐려 렌즈를 돌려 맞춰야 함", "• 정지 사진만 확인했고 주행 중 영상은 아직 미검증",
-             "• 배터리 완충 전압(ESC 상한 8.4V)과 전원 스위치 경로"],
-         7.15, 5.0, 5.5, 0.95, size=12)
+        ["주행 프로그램", "카메라 영상 웹 화면 확인, 조향·전진·후진 동작"],
+        ["게임패드", "블루투스 연결 (/dev/input/js0)"],
+        ["Pi 온도", "유휴 42.2°C, 방열팬 추가"]]
+add_table(s, data, 6.95, 1.55, 5.85, [1.5, 3.8], row_h=0.44, size=12, first_col_bold=True)
+add_box(s, 6.95, 5.2, 5.85, 1.1, fill=WHITE, line=ORANGE)
+add_text(s, "남은 점검", 7.15, 5.25, 3, 0.4, size=15, bold=True, color=ORANGE)
+add_text(s, ["• 카메라 초점·위치: 차 앞쪽에 고정한 뒤 바닥 영상으로 확인", "• Pi 전원: 보조배터리로 바꾼 뒤 저전압 기록(get_throttled) 확인"],
+         7.15, 5.62, 5.5, 0.65, size=12)
 add_text(s, "※ 위 출력은 작업 중 터미널 결과를 정리한 것이며, 실행 시점에 따라 표시가 조금 다를 수 있습니다.", 0.6, 6.4, 12, 0.3,
          size=11, color=GRAY)
 
@@ -597,14 +601,78 @@ add_text(s, "좌", 0.65, y - 0.1, 0.5, 0.4, size=16, bold=True, color=GRAY)
 add_text(s, "우", 12.2, y - 0.1, 0.5, 0.4, size=16, bold=True, color=GRAY)
 data = [["설정 항목", "값"], ["STEERING_LEFT_PWM", "460"], ["중앙", "400"], ["STEERING_RIGHT_PWM", "340"]]
 add_table(s, data, 3.6, 4.95, 6.1, [3.6, 1.6], row_h=0.38, size=12, first_col_bold=True, align_cols={1: PP_ALIGN.CENTER})
-add_text(s, "※ myconfig.py 반영은 ESC 연결 후 함께 진행 예정", 3.6, 6.55, 7, 0.3, size=11, color=GRAY)
+add_text(s, "※ myconfig.py에 반영했고, 주행 프로그램에서 좌우 조향을 확인했습니다.", 3.6, 6.55, 7, 0.3, size=11, color=GRAY)
+
+# ------------------------------------------------------------------ 15b. Throttle calibration
+s = new_slide("구동(ESC) 보정과 정지 구간", "donkey calibrate --channel 1 --bus=1 로 측정 (11-18 재측정)",
+              "이 ESC는 앞으로 갈수록 값이 작아지고, 359부터 402까지는 움직이지 않는 정지 구간입니다. 정지값은 이 구간의 가운데인 380을 쓰고, "
+              "전진 최대는 330, 후진 최대는 435로 정했습니다. 처음 측정값(앞 350)으로는 속도 제한을 걸면 전진 신호가 정지 구간 안에 머물러 전진하지 않았습니다.")
+x0, x1 = 1.2, 12.1
+y = 3.3
+
+
+def tx(v):  # 325(전진) .. 440(후진)
+    return x0 + (v - 325) / 115 * (x1 - x0)
+
+
+add_box(s, x0, y, x1 - x0, 0.28, fill=RGBColor(0xD5, 0xDB, 0xE3), shape=MSO_SHAPE.RECTANGLE)
+add_box(s, tx(330), y, tx(359) - tx(330), 0.28, fill=TEAL, shape=MSO_SHAPE.RECTANGLE)
+add_box(s, tx(359), y, tx(403) - tx(359), 0.28, fill=RGBColor(0x9A, 0xA5, 0xB1), shape=MSO_SHAPE.RECTANGLE)
+add_box(s, tx(403), y, tx(435) - tx(403), 0.28, fill=ORANGE, shape=MSO_SHAPE.RECTANGLE)
+add_text(s, "정지 구간 359~402", tx(359), y + 0.32, tx(403) - tx(359), 0.35, size=12, color=GRAY, align=PP_ALIGN.CENTER)
+pts = [(330, "전진 최대", TEAL, "THROTTLE_FORWARD_PWM", True), (359, "전진 시작", TEAL, "매우 느리게", False),
+       (380, "정지", NAVY, "THROTTLE_STOPPED_PWM", True), (403, "후진 시작", ORANGE, "매우 느리게", False),
+       (435, "후진 최대", ORANGE, "THROTTLE_REVERSE_PWM", True)]
+for v, name, col, sub, up in pts:
+    px = tx(v)
+    mk = s.shapes.add_shape(MSO_SHAPE.OVAL, Inches(px - 0.16), Inches(y - 0.02), Inches(0.32), Inches(0.32))
+    mk.fill.solid()
+    mk.fill.fore_color.rgb = col
+    mk.line.color.rgb = WHITE
+    mk.line.width = Pt(1.5)
+    mk.shadow.inherit = False
+    ty = y - 1.15 if up else y + 0.7
+    add_text(s, str(v), px - 0.7, ty, 1.4, 0.45, size=22, bold=True, color=col, align=PP_ALIGN.CENTER)
+    add_text(s, [name, sub], px - 1.2, ty + 0.45, 2.4, 0.8, size=12, color=GRAY, align=PP_ALIGN.CENTER)
+add_text(s, "전진", 0.55, y - 0.1, 0.7, 0.4, size=16, bold=True, color=TEAL)
+add_text(s, "후진", 12.2, y - 0.1, 0.8, 0.4, size=16, bold=True, color=ORANGE)
+add_box(s, 0.6, 5.35, 12.15, 1.45, fill=LIGHT)
+add_text(s, ["• 값이 작을수록 전진 (일반적인 ESC와 반대) → FORWARD(330) < STOPPED(380)으로 설정, DonkeyCar에서 정상 전진 확인",
+             "• ESC는 켜질 때 받은 신호를 정지로 기억 → 프로그램이 정지 신호(380)를 내는 동안 차 스위치를 켬",
+             "• 정지 구간이 넓어서 최대 속도를 0.5로 제한하면 전진이 덜덜거림 → 게임패드 최대 속도 0.6으로 설정"],
+         0.8, 5.42, 11.8, 1.35, size=13)
+
+# ------------------------------------------------------------------ 15c. Drive test & fixes
+s = new_slide("주행 프로그램 테스트와 해결한 문제", "바퀴를 띄운 채 웹 화면과 게임패드로 조향·전진·후진 확인",
+              "주행 프로그램을 실행하면서 다섯 가지 문제를 만났고 모두 해결했습니다. 특히 웹 화면 파일 누락과 트리거 방향은 "
+              "DonkeyCar 설치본 자체의 문제였고, 같은 버전의 원본 코드를 확인해서 원인을 찾았습니다.")
+data = [["문제", "원인", "해결"],
+        ["카메라 Remote I/O error (11-17)", "미확인 (다음 날 재발 없음)", "단독·연속 촬영 확인 후 주행 프로그램 정상"],
+        ["웹 화면에 영상·디자인이 안 나옴", "pip 설치본에 웹 static 폴더가 빠져 있음", "같은 버전(5.4.0) 원본 코드에서 폴더 복사"],
+        ["웹 화면 키를 눌러도 반응 없음", "게임패드 기본 설정이 웹 조종 값을 덮어씀", "USE_JOYSTICK_AS_DEFAULT 설정 변경"],
+        ["후진만 되고 전진이 안 됨", "ESC 정지 구간이 넓어져 전진 신호가 구간 안", "ESC 재측정 → 앞 330 / 후진 435"],
+        ["게임패드 연결 실패", "패드의 블루투스 주소가 페어링마다 바뀜", "새로 뜬 주소로 pair · trust · connect"],
+        ["RT가 후진, LT가 전진", "DonkeyCar 코드의 트리거 방향 버그", "controller.py 트리거 매핑 수정"]]
+add_table(s, data, 0.6, 1.5, 12.15, [3.3, 4.3, 4.5], row_h=0.55, size=13, first_col_bold=True)
+add_box(s, 0.6, 5.6, 12.15, 1.2, fill=WHITE, line=ORANGE)
+add_text(s, "배운 점", 0.8, 5.66, 3, 0.4, size=15, bold=True, color=ORANGE)
+add_text(s, ["• 설치 파일·판매 설명을 그대로 믿지 않고, 원본 코드와 실측값으로 확인하기",
+             "• DonkeyCar 설치 파일을 직접 고친 부분은 재설치하면 사라지므로 문서에 복구 방법을 기록"],
+         0.8, 6.03, 11.8, 0.75, size=13)
+
+# ------------------------------------------------------------------ 15d. Gamepad
+s = new_slide("수동 조종: 게임패드 조작", "MOGA XP5-X Plus (블루투스) · DonkeyCar 5.4.0 기준",
+              "데이터 수집은 게임패드로 합니다. B로 녹화를 켜고 끄고, 부딪히거나 실수한 구간은 X로 최근 기록을 지웁니다. "
+              "이상하면 Y로 비상 정지합니다. 최대 속도는 0.6으로 정했습니다.")
+add_image(s, "게임패드_조작키.png", 1.3, 1.4, 10.7, 5.5)
 
 # ------------------------------------------------------------------ 16. Power diagram
 s = new_slide("전원 설계", "배터리 하나를 단자대에서 나눠 ESC와 UBEC에 공급 (배선 완료)",
-              "배터리 전원은 단자대에서 ESC와 UBEC로 나뉩니다. UBEC가 Pi와 PCA9685에 5V를 줍니다. "
+              "배터리 전원은 단자대에서 ESC와 UBEC로 나뉩니다. UBEC는 PCA9685를 거쳐 서보에만 5V를 줍니다. "
               "ESC에 있는 5.7V 출력은 쓰지 않고, 두 전원이 합쳐지지 않게 서보 플러그의 빨간 선을 절연합니다. "
               "기존 보드를 빼면 스위치가 빠지는 구조여서, 스위치를 배터리 + 선 중간에 직접 이었습니다. "
-              "UBEC 출력은 5.4V라 Pi에는 약간 높아서 서보 전원(PCA9685)에만 쓰고, Pi는 USB-C로 전원을 줍니다.")
+              "UBEC 출력은 5.0~5.1V지만 서보가 움직일 때 4V 중반까지 떨어졌습니다. 그래서 Pi는 UBEC와 나누고 USB-C로 따로 전원을 주며, "
+              "앞으로 5V 3A 보조배터리로 바꿀 예정입니다.")
 
 
 def n2(l, t, w, h, title, sub=None, line=NAVY, fill=WHITE, tcolor=NAVY):
@@ -618,7 +686,7 @@ n2(5.4, 3.2, 2.0, 1.0, "단자대 × 2", "PCT-213 (+ / −)", line=ORANGE)
 n2(8.5, 1.85, 2.1, 1.0, "ESC 30A", "입력 4.8~8.4V", line=ORANGE)
 n2(11.1, 1.85, 1.7, 1.0, "모터", "")
 n2(8.5, 4.55, 2.1, 1.0, "UBEC 5V 5A", "", line=TEAL)
-n2(11.1, 3.85, 1.7, 0.9, "Pi 5", "USB-C (별도)", fill=NAVY, line=NAVY, tcolor=WHITE)
+n2(11.1, 3.85, 1.7, 0.9, "Pi 5", "USB-C 별도 전원", fill=NAVY, line=NAVY, tcolor=WHITE)
 n2(11.1, 5.05, 1.7, 0.9, "PCA9685", "V+ 5V", line=TEAL)
 arrow(s, 2.7, 3.7, 3.2, 3.7, color=RED, width=3)
 arrow(s, 4.9, 3.7, 5.4, 3.7, color=RED, width=3)
@@ -627,8 +695,8 @@ arrow(s, 7.4, 3.95, 8.5, 5.05, color=RED, width=3, label="7.4V", lx=-0.45, ly=0.
 arrow(s, 10.6, 2.35, 11.1, 2.35, color=ORANGE, width=3)
 arrow(s, 10.6, 5.25, 11.1, 5.5, color=TEAL, width=3)
 add_box(s, 0.6, 6.0, 12.2, 0.85, fill=LIGHT)
-add_text(s, ["핵심 규칙: ① ESC 3핀의 빨간 선(5.7V)은 PCA9685에 연결하지 않음  ② UBEC 출력 5V를 확인한 뒤 Pi 연결",
-             "③ 배터리 2개 병렬은 완충 후 전압이 같을 때만  ④ UBEC 출력은 5.4V, Pi에는 연결하지 않음"],
+add_text(s, ["핵심 규칙: ① ESC 3핀의 빨간 선(5.7V)은 PCA9685에 연결하지 않음  ② Pi는 UBEC와 분리 (서보 동작 시 4V 중반으로 떨어짐)",
+             "③ 배터리 2개 병렬은 완충 후 전압이 같을 때만  ④ Pi 전원: USB-C 충전기 → 5V 3A 보조배터리 예정"],
          0.8, 6.05, 11.8, 0.8, size=13)
 
 # ------------------------------------------------------------------ 17. ESC and parts
@@ -662,23 +730,23 @@ data = [["위험", "원인", "대응"],
         ["전원 충돌", "ESC의 5.7V 출력과 UBEC 5V가 합쳐짐", "서보 플러그 빨간 선 핀을 빼고 절연"],
         ["ESC 선 반대 연결", "판매 설명과 실제 선 구분이 반대였음", "기판에 인쇄된 VCC/GND, M+/M−로 확인 (수정 완료)"],
         ["배터리 방전", "약하면 ESC가 삐 소리·깜박임, 모터가 떨림", "충전된 배터리로 교체, 두 개를 번갈아 사용"],
-        ["배터리 병렬", "충전 상태가 다른 배터리를 연결", "둘 다 완충 후 전압을 맞춘 뒤 연결"],
+        ["Pi 저전압", "서보가 움직일 때 UBEC 출력이 4V 중반까지 떨어짐", "Pi는 별도 전원(USB-C, 보조배터리 예정)"],
         ["서보 한계 초과", "좌우 끝에서 기계 한계 도달", "한계에서 10 정도 물러난 값 사용 (340/460)"],
         ["접촉 불량", "얇은 선이 단자대에서 헐거워짐", "선 끝을 접어 두껍게, 당겨서 확인"],
-        ["카메라 화질", "초점이 맞지 않으면 학습 품질 저하", "렌즈를 돌려 초점 조정 후 영상 확인"],
+        ["카메라 각도 변화", "각도가 바뀌면 모은 데이터를 다시 모아야 함", "차 앞쪽에 고정하고 각도를 사진으로 기록"],
         ["메모리 한계", "Pi 5 1GB", "입력 160×120, 양자화 모델 사용"]]
 add_table(s, data, 0.6, 1.5, 12.15, [1.8, 4.2, 4.6], row_h=0.5, size=12, first_col_bold=True)
 
 # ------------------------------------------------------------------ 19. Next
-s = new_slide("남은 일정", "배선 완료 이후의 작업 순서",
-              "배선과 값 측정은 끝났습니다. 먼저 카메라 오류를 해결하고, 웹 화면으로 조종이 되는지 바퀴를 띄운 채 확인합니다. "
-              "그다음 집에 있던 MOGA XP5-X Plus 게임패드를 블루투스로 연결해 수동 주행하며 데이터를 모으고 PC에서 학습합니다.")
-steps = [("1", "카메라 케이블 점검", "Pi를 끄고 리본 케이블을\n다시 꽂은 뒤 단독 촬영 확인"),
-         ("2", "웹 UI 조종 테스트", "python manage.py drive,\n바퀴를 띄운 채 j/l/i/k"),
-         ("3", "Pi 연결·전원 점검", "접속이 끊기는 원인 확인,\n충전기 교체"),
-         ("4", "게임패드·초점", "블루투스 페어링, 카메라 초점,\n부품 고정"),
-         ("5", "주행 데이터 수집", "MOGA XP5-X Plus(블루투스)로\n수동 주행 기록"),
-         ("6", "학습 · 자율주행", "PC(RTX 5060) 학습 → Pi 추론")]
+s = new_slide("남은 일정", "조종 확인 이후의 작업 순서",
+              "게임패드로 차를 움직이는 단계까지 마쳤습니다. 이제 카메라를 차 앞쪽에 고정하고, Pi 전원을 보조배터리로 바꾼 뒤 "
+              "바닥에서 주행해 봅니다. 그다음 트랙을 만들어 게임패드로 데이터를 모으고 PC에서 학습합니다.")
+steps = [("1", "카메라 고정", "차 앞쪽, 높이 10~15cm,\n아래로 20~30° · 각도 기록"),
+         ("2", "Pi 전원 교체", "5V 3A 보조배터리,\n저전압 기록 확인"),
+         ("3", "부품 고정·바닥 주행", "선 정리, 낮은 속도로\n직진·회전·초점 확인"),
+         ("4", "주행 데이터 수집", "트랙 제작, 게임패드 B로 녹화\n실수 구간은 X로 삭제"),
+         ("5", "PC 학습 환경", "WSL2(Ubuntu) + GPU,\nDonkeyCar 학습"),
+         ("6", "학습 · 자율주행", "PC(RTX 5060) 학습 →\nPi에 TFLite 설치 후 추론")]
 for i, (n, h, d) in enumerate(steps):
     r, c = divmod(i, 3)
     x = 0.65 + c * 4.1
@@ -686,7 +754,7 @@ for i, (n, h, d) in enumerate(steps):
     add_box(s, x, y, 3.85, 1.8, fill=WHITE, line=RGBColor(0xC9, 0xD1, 0xDB))
     circ = s.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x + 0.2), Inches(y + 0.2), Inches(0.5), Inches(0.5))
     circ.fill.solid()
-    circ.fill.fore_color.rgb = TEAL if i < 3 else RGBColor(0x9A, 0xA5, 0xB1)
+    circ.fill.fore_color.rgb = ORANGE if i == 0 else RGBColor(0x9A, 0xA5, 0xB1)
     circ.line.fill.background()
     circ.shadow.inherit = False
     box_text(circ, n, size=15, bold=True, color=WHITE)
@@ -709,9 +777,10 @@ left.line.fill.background()
 add_text(s, "정리", 0.9, 0.9, 6, 0.8, size=36, bold=True, color=WHITE)
 add_text(s, ["• 실차 데이터로 학습하는 방향으로 목표를 확정했습니다.",
              "• Pi 5, 카메라, PCA9685의 동작을 확인했고 서보 보정까지 마쳤습니다.",
-             "• 기존 보드가 일체형이라 ESC를 추가했고, 배선과 값 측정(정지 380 / 앞 350 / 후진 450)을 마쳤습니다.",
-             "• 다음 단계는 카메라 오류 해결, 웹 UI 조종 테스트, 데이터 수집입니다."],
-         0.9, 2.0, 7.2, 3.2, size=19, color=RGBColor(0xE6, 0xEC, 0xF3), line_spacing=1.2)
+             "• 기존 보드가 일체형이라 ESC를 추가했고, 값 측정(앞 330 / 정지 380 / 후진 435)을 마쳤습니다.",
+             "• 주행 프로그램에서 웹 화면과 게임패드로 조향·전진·후진을 확인했습니다.",
+             "• 다음 단계는 카메라 고정, 바닥 주행, 데이터 수집입니다."],
+         0.9, 1.9, 7.2, 3.6, size=18, color=RGBColor(0xE6, 0xEC, 0xF3), line_spacing=1.15)
 if os.path.exists(os.path.join(ROOT, "KakaoTalk_20261109_150928423.jpg")):
     tp, _ = fit_image(os.path.join(ROOT, "KakaoTalk_20261109_150928423.jpg"))
     s.shapes.add_picture(tp, Inches(8.3), Inches(1.6), width=Inches(4.6))

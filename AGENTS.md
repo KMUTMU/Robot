@@ -78,7 +78,7 @@
 | 웹 UI 키를 눌러도 반응 없음 | 템플릿 기본값 `USE_JOYSTICK_AS_DEFAULT = True` → 게임패드 부품이 웹 값을 0으로 덮어씀 | (당시) `False`로 설정. 지금은 게임패드를 쓰므로 `True` |
 | 웹 UI에서 전진 안 됨, 후진만 됨 | ESC 정지 구간이 359~402로 넓어짐. 기존 앞 최대 350에 50% 제한 → 365로 정지 구간 안 | 재측정 후 앞 최대 330 / 후진 최대 435 |
 | 게임패드 페어링 실패 (`ConnectionAttemptFailed`, 붙었다 끊김 반복) | 패드가 페어링할 때마다 **블루투스 주소가 바뀜**(BLE 랜덤 주소). 예전 주소로 시도했음 (추정) | `scan on` → 새로 뜬 주소로 `pair` → `trust` → `connect`. 이 과정에서 `/etc/bluetooth/main.conf`에 `ControllerMode = dual`, `JustWorksRepairing = confirm` 적용을 안내함 (적용 여부 미확인, 백업 `main.conf.bak`) |
-| 게임패드 50%에서 전진이 덜덜거림 | 50% → 전진 신호 약 355로 모터가 겨우 도는 경계 | RB로 올려 해결, `JOYSTICK_MAX_THROTTLE`을 그 값으로 고정 |
+| 게임패드 50%에서 전진이 덜덜거림 | 50% → 전진 신호 약 355로 모터가 겨우 도는 경계 | RB로 올려 해결, `JOYSTICK_MAX_THROTTLE = 0.6`으로 고정 |
 | RT가 후진, LT가 전진 | **DonkeyCar 버그**: 트리거 값(0~1)에 `JOYSTICK_THROTTLE_DIR = -1.0`이 곱해짐 | `controller.py`의 트리거 매핑을 서로 바꿈 (6번) |
 
 ## 5. 하드웨어 구성 (실제)
@@ -185,7 +185,7 @@ PWM_STEERING_THROTTLE = {
 # 11-18 이후 파일 맨 아래에 echo로 추가한 줄
 USE_JOYSTICK_AS_DEFAULT = True     # 한때 False(웹 UI 조종용)로 바꿨다가 게임패드 연결 후 True
 AUTO_RECORD_ON_THROTTLE = False    # 스로틀을 넣으면 자동 녹화되는 기본 동작 끔 → B 버튼으로 녹화
-JOYSTICK_MAX_THROTTLE = ...        # 50%(0.5)에서 전진이 덜덜거려 RB로 올린 값으로 고정. 정확한 값은 Pi의 파일 확인
+JOYSTICK_MAX_THROTTLE = 0.6       # 0.5에서 전진이 덜덜거려 0.6으로 고정 (11-19)
 ```
 - DonkeyCar 템플릿 기본값은 조향 `.1`, 구동 `.0`으로 **우리 배선과 반대**라서 위처럼 바꿈
 - `CONTROLLER_TYPE`은 템플릿 기본값 `'xbox'` 그대로 사용 (MOGA XP5-X Plus와 맞음: jstest 기준 왼쪽 스틱 축 0·1, 오른쪽 스틱 축 2·3, A = 버튼 0)
@@ -220,7 +220,7 @@ venv 경로: `~/env/lib/python3.13/site-packages/donkeycar/`
 | 왼쪽 스틱 좌우 | 조향 |
 | 오른쪽 스틱 위아래 | 속도 (위 = 전진) |
 | RT / LT | 전진 / 후진 (위 수정 후) |
-| RB / LB | 최대 속도 +0.01 / −0.01 (터미널에 `throttle_scale:` 출력, 재시작하면 `JOYSTICK_MAX_THROTTLE`로 돌아감) |
+| RB / LB | 최대 속도 +0.01 / −0.01 (터미널에 `throttle_scale:` 출력, 재시작하면 `JOYSTICK_MAX_THROTTLE`(0.6)로 돌아감) |
 | Y | 비상 정지 (모드를 `user`로, 녹화·일정 속도 주행 끔) |
 | B | 녹화 켜기/끄기 |
 | X | 최근 기록 삭제 (기본 100장 ≈ 5초) |
@@ -270,11 +270,12 @@ venv 경로: `~/env/lib/python3.13/site-packages/donkeycar/`
 | `01_OS설치_가이드.md` | Pi 5 OS 설치·SSH, 접속 정보 |
 | `02_DonkeyCar설치_가이드.md` | DonkeyCar 설치, 카메라 인식·오류·초점, TF TODO |
 | `03_RC카개조_체크리스트.md` | ⭐ 다음에 할 일, 단자대 배치, ESC·서보 값, myconfig |
+| `게임패드_조작키.png` | 게임패드 조작키 요약 이미지 (발표 자료 18번 슬라이드에도 사용) |
 | `하드웨어_설계.md` | 배선도(신호·전원), 순정 보드 커넥터 |
 | `자동차_완성설계.md` | 구성 요약(순정에서 쓰는 것 / 빼는 것 / 새로 단 것) |
 | `준비물_알리.md` | 구매 목록·예산·변경 이력 (파일명은 알리 기준이지만 국내 구매 포함) |
 | `학습_파이프라인.md` | 데이터 수집 → 학습 → 배포 절차 |
-| `중간점검_자율주행RC카.pptx` / `build_deck.py` | 발표 자료(20장)와 생성 스크립트 (`pip install python-pptx==1.0.2` 후 `python build_deck.py`). 수정은 스크립트의 슬라이드별 블록에서 |
+| `중간점검_자율주행RC카.pptx` / `build_deck.py` | 발표 자료(23장)와 생성 스크립트 (`pip install python-pptx==1.0.2` 후 `python build_deck.py`). 수정은 스크립트의 슬라이드별 블록에서 |
 | 사진들 | 아래 표 |
 
 ### 사진 설명
@@ -304,13 +305,14 @@ venv 경로: `~/env/lib/python3.13/site-packages/donkeycar/`
 | 11-16~17 | 스위치 경로 확인, 단자대 A~E 배선, UBEC 5.4V 확인, ESC 신호 ch1. **ESC 선 반대 연결을 발견·수정**. 배터리 방전으로 인한 ESC 경고를 겪고 교체 후 해결. ESC 값 측정, `myconfig.py` 적용. 주행 프로그램 실행 중 **카메라 오류**로 중단 |
 | 11-17 | 문서·AGENTS.md 정리 후 푸시 |
 | 11-18 | 카메라 단독·연속 촬영 정상 → `drive` 정상(원인 미확인). 웹 UI `static` 폴더 누락 발견·복사. `USE_JOYSTICK_AS_DEFAULT` 문제 해결. **ESC 재측정(정지 구간 359~402) → 앞 330 / 정지 380 / 후진 435** → 웹 UI로 조향·전진·후진 확인. Pi 방열팬 장착. UBEC 재측정(5.0~5.1V, 서보 동작 시 4V 중반) → Pi 전원과 분리 결정, 보조배터리 검토 |
-| 11-18~19 | 게임패드 MOGA XP5-X Plus 블루투스 페어링(주소가 바뀌는 문제), `js0`·jstest 확인, 게임패드로 주행 확인. 50%에서 전진이 덜덜거려 `JOYSTICK_MAX_THROTTLE` 상향. RT/LT 방향 버그를 `controller.py` 수정으로 해결. `AUTO_RECORD_ON_THROTTLE = False`. 보조배터리 후보(M-MAG15W-5000) 확인. 문서 갱신 후 푸시 |
+| 11-18~19 | 게임패드 MOGA XP5-X Plus 블루투스 페어링(주소가 바뀌는 문제), `js0`·jstest 확인, 게임패드로 주행 확인. 50%에서 전진이 덜덜거려 `JOYSTICK_MAX_THROTTLE` 0.6으로 상향. RT/LT 방향 버그를 `controller.py` 수정으로 해결. `AUTO_RECORD_ON_THROTTLE = False`. 보조배터리 후보(M-MAG15W-5000) 확인. 문서 갱신 후 푸시 |
+| 11-19 | `JOYSTICK_MAX_THROTTLE = 0.6` 확정. 게임패드 조작키 이미지 제작, 발표 자료 갱신(20장 → 23장: 구동 보정, 주행 테스트·해결한 문제, 게임패드 조작 추가) |
 
 ## 11. 열린 질문 / 미확인 항목
 - 11-17 카메라 `Remote I/O error`의 원인 (11-18에는 재발 안 함. 재발하면 케이블 → 전원 → 프로세스 점유 순으로 확인)
 - Pi 접속이 끊기는 원인 (WiFi vs 저전압 재부팅). 보조배터리·USB WiFi 안테나로 바꾼 뒤 재발 여부로 구분 가능
 - ESC 값이 11-17과 11-18에 달랐던 이유
-- `JOYSTICK_MAX_THROTTLE`의 정확한 값, 데이터 수집에 알맞은 속도
+- 데이터 수집에 알맞은 속도 (지금 `JOYSTICK_MAX_THROTTLE = 0.6`)
 - 트리거 수정 후 RT에서 손을 뗐을 때 멈추는지
 - 카메라 초점 (160x120 영상으로는 판단 보류) / 자홍색 색감
 - 차의 앞뒤 방향 확인 (사진상 단자대가 있는 검은 판 쪽이 앞으로 추정)
