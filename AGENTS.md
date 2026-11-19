@@ -186,6 +186,7 @@ PWM_STEERING_THROTTLE = {
 USE_JOYSTICK_AS_DEFAULT = True     # 한때 False(웹 UI 조종용)로 바꿨다가 게임패드 연결 후 True
 AUTO_RECORD_ON_THROTTLE = False    # 스로틀을 넣으면 자동 녹화되는 기본 동작 끔 → B 버튼으로 녹화
 JOYSTICK_MAX_THROTTLE = 0.6       # 0.5에서 전진이 덜덜거려 0.6으로 고정 (11-19)
+AI_LAUNCH_ENABLE_BUTTON = 'unknown(0x13a)'   # AI 출발 가속을 View 버튼(네모 두 개)으로. Xbox 매핑에는 R2 버튼이 없음 (11-19)
 ```
 - DonkeyCar 템플릿 기본값은 조향 `.1`, 구동 `.0`으로 **우리 배선과 반대**라서 위처럼 바꿈
 - `CONTROLLER_TYPE`은 템플릿 기본값 `'xbox'` 그대로 사용 (MOGA XP5-X Plus와 맞음: jstest 기준 왼쪽 스틱 축 0·1, 오른쪽 스틱 축 2·3, A = 버튼 0)
@@ -226,7 +227,9 @@ venv 경로: `~/env/lib/python3.13/site-packages/donkeycar/`
 | X | 최근 기록 삭제 (기본 100장 ≈ 5초) |
 | Options | 일정 속도 주행 켜기/끄기 (**실수로 누르면 차가 혼자 출발**) |
 | A | 모드 `user` → `local_angle`(AI 조향) → `local`(AI 전부) |
-| R2 | AI 출발 가속 (`AI_LAUNCH_*` 기본 0이라 지금은 효과 없음) |
+| View (네모 두 개) | AI 출발 가속. 기본 R2는 Xbox 매핑에 없는 버튼이라(RT는 축으로 읽힘) `AI_LAUNCH_ENABLE_BUTTON = 'unknown(0x13a)'`로 옮김. `AI_LAUNCH_THROTTLE`·`AI_LAUNCH_DURATION`이 0이라 지금은 효과 없음 |
+
+- DonkeyCar Xbox 매핑에 이름이 없는 버튼은 `unknown(0x...)` 이름으로 읽혀서, myconfig에서 그 이름으로 기능을 연결할 수 있음. 버튼 코드 확인: `python -c "from donkeycar.parts.controller import XboxOneJoystick as J; ..."`로 `j.poll()` 출력 (View = `0x13a`)
 
 ### Pi 전원 관련 측정 (11-18)
 - `vcgencmd measure_temp`, `vcgencmd get_throttled`(0x0 정상)로 확인
