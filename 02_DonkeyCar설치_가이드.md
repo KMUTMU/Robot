@@ -187,7 +187,9 @@ donkey createcar --path ~/mycar
 - 확인: `ls /dev/input/js0`, `sudo apt install -y joystick`, `jstest /dev/input/js0`
 - `CONTROLLER_TYPE = 'xbox'`(기본값) 그대로 맞음. 트리거 방향 버그 수정은 [AGENTS.md](AGENTS.md) 6번
 
-### 🔍 초점 맞추기 (⬜ 미완료)
+### 🔍 초점 맞추기 (✅ 11-19 완료)
+- 11-19: Pi에 만든 `~/camstream.py`(picamera2 MJPEG, 1640×1232)를 `python ~/camstream.py`로 실행 → PC 브라우저 `http://192.168.0.155:8000`에서 보며 렌즈를 돌려 맞춤. 스크립트 내용은 대화 기록 기준이며 저장소에는 없음
+- 주의: DonkeyCar는 센서 가운데 1280×960만 잘라 써서, 1640×1232 스트림보다 시야가 훨씬 좁음. 위치·각도는 DonkeyCar 화면(`:8887`)으로 맞출 것
 - 웹 UI 영상은 160x120을 확대해서 보여 줘서 원래 조금 뭉개져 보임 → 차를 바닥에 두고 앞쪽 바닥이 보이는지로 판단 예정
 - 첫 테스트 사진이 **많이 흐렸음** → 렌즈 초점이 안 맞은 상태
 - 렌즈 통을 손으로 돌려 **50cm~1m 거리**에 맞추기. 실시간 영상을 보면서 조정:
