@@ -93,6 +93,16 @@ select{background:#14171d;color:var(--ink);border:1px solid var(--line);border-r
 .sum b{display:block;font-size:24px}
 .sum span{font-size:13px;color:var(--muted)}
 .tip{color:#cfd5de;font-size:14.5px;margin:6px 0}
+#keys{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:max-content;max-width:min(840px,calc(100vw - 690px));display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:9px 14px;border-radius:12px;background:rgba(16,18,24,.58);border:1px solid var(--line);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-size:13px;color:#d6dbe3;pointer-events:none}
+#keys span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+#keys kbd{display:inline-grid;place-items:center;min-width:24px;height:23px;padding:0 6px;border-radius:6px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.26);border-bottom-width:3px;font:700 12px/1 "IBM Plex Sans KR",sans-serif;color:var(--ink);transition:background .08s,border-color .08s,transform .08s}
+#keys kbd.wide{min-width:46px}
+#keys kbd.on{background:var(--accent);border-color:#93acff;transform:translateY(1px)}
+#keys kbd.rec{background:var(--rec);border-color:#ff8f86}
+#keys kbd.hold{background:var(--warn);border-color:#ffd391;color:#1d1406}
+#keys .hide{color:var(--muted)}
+#keys.min{padding:6px 10px}
+#keys.min>span:not(.hide){display:none}
 #touch{position:fixed;inset:0;pointer-events:none}
 #touch .zone{position:absolute;pointer-events:auto}
 #steerPad{left:12px;bottom:12px;width:min(36vw,320px);height:140px;border-radius:16px;background:rgba(16,18,24,.35);border:1px solid var(--line)}
@@ -104,15 +114,20 @@ select{background:#14171d;color:var(--ink);border:1px solid var(--line);border-r
 #rev{right:128px;width:80px;height:80px}
 .pedal:active,.tbtn:active{filter:brightness(1.4)}
 .tbtn{width:56px;height:44px;border-radius:10px;border:1px solid var(--line);background:rgba(16,18,24,.55);font-size:13px;font-weight:700;display:grid;place-items:center}
+@media (max-width:1100px){
+  .bl{display:none}
+  #keys{left:14px;transform:none;max-width:calc(100vw - 376px);justify-content:flex-start}
+}
 @media (max-width:900px){
+  #keys{max-width:calc(100vw - 28px)}
   .card{grid-template-columns:minmax(0,1fr)}
   .tl{width:200px;padding:9px 11px}.tl .big{font-size:22px}
   .tr{width:206px;padding:9px 11px}#mini{width:182px;height:140px}
   .bl{display:none}
-  #pipFrame{width:192px;height:144px;bottom:auto;top:250px;right:14px}
+  #pipFrame{width:192px;height:144px;bottom:auto;top:290px;right:14px}
 }
 @media (pointer:coarse){
-  .bl{display:none}
+  .bl,#keys{display:none}
   .tl{width:184px;padding:8px 10px}.tl .big{font-size:22px}
   .tr{width:188px;padding:8px 10px}#mini{width:166px;height:129px}
   #pipFrame{width:160px;height:120px;right:auto;left:50%;transform:translateX(-50%);top:54px;bottom:auto}
@@ -155,12 +170,27 @@ select{background:#14171d;color:var(--ink);border:1px solid var(--line);border-r
     <div class="bar"><span class="cap" id="thrCap"></span><i id="thrBar"></i></div>
     <div class="kv"><span>속도</span><b id="spd">0.00 m/s</b></div>
     <div class="kv"><span>조향 PWM / ESC PWM</span><b id="pwm">395 / 380</b></div>
-    <div class="kv"><span>최대 스로틀 (RB/LB)</span><b id="maxThr">0.60</b></div>
+    <div class="kv"><span>최대 스로틀 ([ ] / RB LB)</span><b id="maxThr">0.80</b></div>
     <div class="dead" id="dead"></div>
   </div>
   <div id="pipFrame"><span>차 카메라 = 모델 입력 160×120</span><i class="roi">학습 때 잘라내는 부분</i></div>
   <div id="camLabel">추격 카메라 (C)</div>
   <div id="toasts" aria-live="polite"></div>
+  <div id="keys" aria-label="키보드 단축키">
+    <span><kbd data-k="KeyW">W</kbd><kbd data-k="KeyS">S</kbd>전진·후진</span>
+    <span><kbd data-k="KeyA">A</kbd><kbd data-k="KeyD">D</kbd>조향</span>
+    <span><kbd data-k="KeyR" id="kRec">R</kbd>녹화</span>
+    <span><kbd data-k="KeyX">X</kbd>100장 삭제</span>
+    <span><kbd data-k="Space" class="wide">Space</kbd>비상 정지</span>
+    <span><kbd data-k="KeyQ">Q</kbd>모드</span>
+    <span><kbd data-k="KeyO" id="kConst">O</kbd>일정 속도</span>
+    <span><kbd data-k="BracketLeft">[</kbd><kbd data-k="BracketRight">]</kbd>최대 속도</span>
+    <span><kbd data-k="KeyC">C</kbd>카메라</span>
+    <span><kbd data-k="KeyF">F</kbd>되돌리기</span>
+    <span><kbd data-k="Escape" class="wide">Esc</kbd>메뉴</span>
+    <span><kbd data-k="KeyM">M</kbd>소리</span>
+    <span class="hide"><kbd data-k="KeyH">H</kbd><span id="keyHideLabel">단축키 숨기기</span></span>
+  </div>
 </div>
 
 <div id="touch" hidden>
@@ -180,10 +210,10 @@ select{background:#14171d;color:var(--ink);border:1px solid var(--line);border-r
   <div class="card">
     <div>
       <h1>우리 집 주행 연습장</h1>
-      <p class="lede">내 RC카를 집 안에서 직접 몰아 보세요. 녹화를 켜고 바닥 테이프 경로를 따라 돌면, DonkeyCar처럼 1초에 20장씩 학습 데이터가 쌓여요.</p>
+      <p class="lede">내 RC카를 좁은 집 안에서 직접 몰아 보세요. 녹화를 켜고 바닥 테이프 경로를 따라 돌면, DonkeyCar처럼 1초에 20장씩 학습 데이터가 쌓여요.</p>
       <div class="modes">
-        <button type="button" class="modebtn primary" data-mode="collect"><b>기록 주행 (데이터 수집)</b><small>체크포인트 12개를 순서대로 지나 한 바퀴. 충돌하면 그 기록은 나쁜 데이터예요.</small></button>
-        <button type="button" class="modebtn" data-mode="free"><b>자유 주행</b><small>베란다 경사로, 문턱, 전선, 쿠션, 책 다리, 로봇청소기까지 마음대로 탐험해요.</small></button>
+        <button type="button" class="modebtn primary" data-mode="collect"><b>기록 주행 (데이터 수집)</b><small>폭 45cm 테이프 경로(약 15m)를 체크포인트 12개 순서대로 한 바퀴. 가구 사이가 좁아요. 부딪히면 그 기록은 나쁜 데이터예요.</small></button>
+        <button type="button" class="modebtn" data-mode="free"><b>자유 주행</b><small>베란다 경사로, 문턱, 전선, 쿠션, 책 다리, 복도 짐더미, 로봇청소기, 고양이까지 마음대로 탐험해요.</small></button>
       </div>
       <p class="pad" id="padState">게임패드: 연결 안 됨. 블루투스로 연결한 뒤 아무 버튼이나 누르면 잡혀요.</p>
     </div>
@@ -202,9 +232,11 @@ select{background:#14171d;color:var(--ink);border:1px solid var(--line);border-r
         <tr><td>카메라 바꾸기</td><td>C</td><td>십자키 ← →</td></tr>
         <tr><td>차 되돌리기</td><td>F</td><td>십자키 ↑</td></tr>
         <tr><td>일시정지</td><td>Esc / P</td><td>십자키 ↓</td></tr>
+        <tr><td>소리 / 단축키 표시</td><td>M / H</td><td>-</td></tr>
       </table>
       <div class="opts">
         <div class="opt"><span>실제 ESC처럼 정지 구간 적용 (스로틀 0.42 미만은 안 움직임)</span><button type="button" class="switch" id="optDead" aria-pressed="true" aria-label="ESC 정지 구간"></button></div>
+        <div class="opt"><span>시작 속도 (최대 스로틀, RB/LB로 바꿀 수 있음)</span><select id="optSpeed"><option value="0.6">0.60 실제 차 설정</option><option value="0.8">0.80 기본 (약 1 m/s)</option><option value="1">1.00 최고</option></select></div>
         <div class="opt"><span>바닥 테이프 경로 보이기</span><button type="button" class="switch" id="optTape" aria-pressed="true" aria-label="테이프 경로"></button></div>
         <div class="opt"><span>소리</span><button type="button" class="switch" id="optSound" aria-pressed="true" aria-label="소리"></button></div>
         <div class="opt"><span>그래픽</span><select id="optQ"><option value="high">높음</option><option value="mid">보통</option><option value="low">낮음</option></select></div>
