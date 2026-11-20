@@ -1,0 +1,9 @@
+{
+  "name": "rc-car-3d-model",
+  "private": true,
+  "description": "RC카 3D 분해도 페이지 빌드용 (three.js 번들)",
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "three": "0.186.1"
+  }
+}
