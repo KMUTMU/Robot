@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>우리 집 주행 연습장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE  운전석 계기판처럼: 지금 필요한 숫자만, 짧은 한국어
+   IDEA   DonkeyCar 데이터 수집 주행을 집 안에서 해 보는 RC 연습장
+   PICTURE 화면 전체가 3D 집과 내 차, 계기판은 가장자리에 얇게
+   COLOUR+TYPE 저녁 실내의 어두운 유리 패널, 포인트는 코발트, 녹화만 빨강 / 제목 Black Han Sans, 숫자 IBM Plex Sans KR
+   LAYOUT 위: 녹화와 랩, 아래: 조작값과 차 카메라, 가운데는 비움 */
+:root{--glass:rgba(16,18,24,.66);--line:rgba(255,255,255,.12);--ink:#f2f4f7;--muted:#a9b0bb;--accent:#5b82ff;--rec:#ff453a;--ok:#3ccf7a;--warn:#ffb340}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;overflow:hidden;background:#20242b;color:var(--ink);font:15px/1.45 "IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;font-variant-numeric:tabular-nums;word-break:keep-all;-webkit-user-select:none;user-select:none;touch-action:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{position:fixed;background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:12px 14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.tl{top:14px;left:14px;width:250px}
+.tr{top:14px;right:14px;width:286px}
+.bl{bottom:14px;left:14px;width:300px}
+.rec{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px}
+.rec i{width:12px;height:12px;border-radius:50%;background:#6b7280}
+.rec.on i{background:var(--rec);box-shadow:0 0 0 0 rgba(255,69,58,.6);animation:pulse 1s infinite}
+.rec.on b{color:var(--rec)}
+@keyframes pulse{50%{opacity:.35}}
+.big{font-size:30px;font-weight:700;line-height:1.1;margin:4px 0 2px}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;color:var(--muted)}
+.row b{color:var(--ink);font-weight:600}
+.mode{display:inline-block;margin-top:6px;padding:2px 9px;border-radius:999px;background:rgba(91,130,255,.18);color:#cdd9ff;font-size:13px;font-weight:600}
+.mode.ai{background:rgba(255,179,64,.2);color:#ffd99a}
+.quality{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin:6px 0 2px}
+.quality i{display:block;height:100%;width:100%;background:var(--ok)}
+#mini{display:block;width:258px;height:200px;margin-top:8px;border-radius:8px;background:rgba(0,0,0,.25)}
+.lap{display:flex;justify-content:space-between;align-items:baseline}
+.lap .big{font-size:26px}
+.bar{position:relative;height:10px;border-radius:5px;background:rgba(255,255,255,.12);margin:5px 0 9px}
+.bar i{position:absolute;top:0;bottom:0;border-radius:5px;background:var(--accent)}
+.bar .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:rgba(255,255,255,.5)}
+.bar .cap{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--warn)}
+.kv{display:flex;justify-content:space-between;font-size:13.5px}
+.kv span{color:var(--muted)}
+.dead{margin-top:6px;font-size:13px;color:var(--warn);min-height:19px}
+#pipFrame{position:fixed;right:14px;bottom:14px;width:320px;height:240px;border-radius:10px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.3);pointer-events:none}
+#pipFrame span{position:absolute;left:0;top:-26px;font-size:13px;font-weight:600;color:var(--ink);text-shadow:0 1px 3px #000}
+#pipFrame .roi{position:absolute;left:0;right:0;top:0;height:25%;background:repeating-linear-gradient(135deg,rgba(0,0,0,.42) 0 6px,rgba(0,0,0,.18) 6px 12px);border-bottom:1px dashed rgba(255,255,255,.6);font-style:normal;font-size:12px;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 1px 2px #000}
+#camLabel{position:fixed;left:50%;top:14px;transform:translateX(-50%);padding:5px 14px;border-radius:999px;background:var(--glass);border:1px solid var(--line);font-size:13.5px;font-weight:600;white-space:nowrap}
+#toasts{position:fixed;left:50%;top:64px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.toast{max-width:min(92vw,620px);padding:8px 16px;border-radius:10px;background:rgba(16,18,24,.82);border:1px solid var(--line);font-weight:600;font-size:16px;text-align:center;animation:tin .25s ease-out}
+.toast.rec{border-color:rgba(255,69,58,.6)}
+.toast.good{border-color:rgba(60,207,122,.6)}
+.toast.warn{border-color:rgba(255,179,64,.7)}
+@keyframes tin{from{opacity:0;transform:translateY(-6px)}}
+.overlay{position:fixed;inset:0;display:grid;place-items:center;padding:24px;background:linear-gradient(90deg,rgba(12,14,18,.86),rgba(12,14,18,.5) 60%,rgba(12,14,18,.25));overflow:auto}
+.card{width:min(1040px,100%);display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:start}
+h1{font:400 clamp(36px,5vw,58px)/1.05 "Black Han Sans","IBM Plex Sans KR",sans-serif;margin:0 0 10px;letter-spacing:-.01em}
+.lede{color:#cfd5de;font-size:16.5px;max-width:46ch;margin:0 0 20px}
+.modes{display:grid;gap:10px;margin-bottom:16px}
+.modebtn{display:block;width:100%;text-align:left;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06)}
+.modebtn b{display:block;font-size:18px}
+.modebtn small{color:var(--muted);font-size:14px}
+.modebtn.primary{background:var(--accent);border-color:var(--accent)}
+.modebtn.primary small{color:#e3e9ff}
+.modebtn:hover{filter:brightness(1.1)}
+.pad{font-size:13.5px;color:var(--muted)}
+.pad b{color:var(--ink)}
+.help{background:var(--glass);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.help h2{font-size:16px;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
+td:first-child{color:var(--muted);white-space:nowrap}
+td:nth-child(2){white-space:nowrap;font-weight:600}
+.opts{display:grid;gap:8px;margin-top:12px;font-size:14px}
+.opt{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.opt select,.opt input[type=range]{accent-color:var(--accent)}
+select{background:#14171d;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit}
+.switch{width:46px;height:26px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.12);position:relative;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#cfd5de;transition:left .15s}
+.switch[aria-pressed=true]{background:var(--accent);border-color:var(--accent)}
+.switch[aria-pressed=true]::after{left:23px;background:#fff}
+.menu{width:min(520px,100%)}
+#pause,#summary{background:rgba(12,14,18,.78);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.touchhelp{display:none;color:#cfd5de;font-size:14px;margin:0 0 12px}
+#rotate{display:none}
+.menu .modebtn{margin-bottom:8px}
+.sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.sum div{background:rgba(255,255,255,.06);border-radius:10px;padding:10px 12px}
+.sum b{display:block;font-size:24px}
+.sum span{font-size:13px;color:var(--muted)}
+.tip{color:#cfd5de;font-size:14.5px;margin:6px 0}
+#touch{position:fixed;inset:0;pointer-events:none}
+#touch .zone{position:absolute;pointer-events:auto}
+#steerPad{left:12px;bottom:12px;width:min(36vw,320px);height:140px;border-radius:16px;background:rgba(16,18,24,.35);border:1px solid var(--line)}
+#steerPad span{position:absolute;left:0;right:0;bottom:7px;text-align:center;font-size:12px;color:var(--muted)}
+#tbtns{left:calc(min(36vw,320px) + 24px);bottom:12px;display:grid;grid-template-columns:repeat(2,56px);gap:8px}
+#steerPad i{position:absolute;top:50%;left:50%;width:64px;height:64px;margin:-32px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.6)}
+.pedal{bottom:12px;border-radius:50%;border:1px solid var(--line);background:rgba(16,18,24,.45);display:grid;place-items:center;font-weight:700;font-size:15px}
+#gas{right:12px;width:104px;height:104px;background:rgba(91,130,255,.45)}
+#rev{right:128px;width:80px;height:80px}
+.pedal:active,.tbtn:active{filter:brightness(1.4)}
+.tbtn{width:56px;height:44px;border-radius:10px;border:1px solid var(--line);background:rgba(16,18,24,.55);font-size:13px;font-weight:700;display:grid;place-items:center}
+@media (max-width:900px){
+  .card{grid-template-columns:minmax(0,1fr)}
+  .tl{width:200px;padding:9px 11px}.tl .big{font-size:22px}
+  .tr{width:206px;padding:9px 11px}#mini{width:182px;height:140px}
+  .bl{display:none}
+  #pipFrame{width:192px;height:144px;bottom:auto;top:250px;right:14px}
+}
+@media (pointer:coarse){
+  .bl{display:none}
+  .tl{width:184px;padding:8px 10px}.tl .big{font-size:22px}
+  .tr{width:188px;padding:8px 10px}#mini{width:166px;height:129px}
+  #pipFrame{width:160px;height:120px;right:auto;left:50%;transform:translateX(-50%);top:54px;bottom:auto}
+  #pipFrame span{display:none}
+  #pipFrame .roi{font-size:10px}
+  #toasts{top:184px}
+  .help table{display:none}
+  .touchhelp{display:block}
+}
+@media (pointer:coarse) and (orientation:portrait){
+  body.playing #rotate{display:grid;position:fixed;inset:0;z-index:20;place-content:center;gap:6px;padding:24px;text-align:center;background:rgba(12,14,18,.93)}
+  #rotate b{font-size:22px}
+  #rotate span{color:var(--muted)}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="집 안을 달리는 RC카 3D 화면"></canvas>
+
+<div id="hud" hidden>
+  <div class="panel tl">
+    <div class="rec" id="recState"><i></i><b>녹화 꺼짐</b></div>
+    <div class="big" id="recCount">0장</div>
+    <div class="row"><span>좋은 기록</span><b id="goodPct">-</b></div>
+    <div class="quality"><i id="goodBar"></i></div>
+    <div class="row"><span>충돌</span><b id="crashes">0</b></div>
+    <span class="mode" id="modeChip">user (수동)</span>
+  </div>
+  <div class="panel tr">
+    <div class="lap"><span id="lapLabel">바퀴 0</span><span class="big" id="lapTime">0:00.0</span></div>
+    <div class="row"><span>체크포인트</span><b id="cpText">0 / 12</b></div>
+    <div class="row"><span>최고 기록</span><b id="bestLap">-</b></div>
+    <canvas id="mini" width="516" height="400"></canvas>
+  </div>
+  <div class="panel bl">
+    <div class="kv"><span>user/angle (조향)</span><b id="angV">0.00</b></div>
+    <div class="bar"><span class="mid"></span><i id="angBar"></i></div>
+    <div class="kv"><span>user/throttle (스로틀)</span><b id="thrV">0.00</b></div>
+    <div class="bar"><span class="cap" id="thrCap"></span><i id="thrBar"></i></div>
+    <div class="kv"><span>속도</span><b id="spd">0.00 m/s</b></div>
+    <div class="kv"><span>조향 PWM / ESC PWM</span><b id="pwm">395 / 380</b></div>
+    <div class="kv"><span>최대 스로틀 (RB/LB)</span><b id="maxThr">0.60</b></div>
+    <div class="dead" id="dead"></div>
+  </div>
+  <div id="pipFrame"><span>차 카메라 = 모델 입력 160×120</span><i class="roi">학습 때 잘라내는 부분</i></div>
+  <div id="camLabel">추격 카메라 (C)</div>
+  <div id="toasts" aria-live="polite"></div>
+</div>
+
+<div id="touch" hidden>
+  <div class="zone" id="steerPad"><i></i><span>좌우로 밀어서 조향</span></div>
+  <div class="zone" id="tbtns">
+    <button type="button" class="tbtn" id="tRec">녹화</button>
+    <button type="button" class="tbtn" id="tCam">카메라</button>
+    <button type="button" class="tbtn" id="tStop">정지</button>
+    <button type="button" class="tbtn" id="tMenu">메뉴</button>
+  </div>
+  <button type="button" class="zone pedal" id="rev">후진</button>
+  <button type="button" class="zone pedal" id="gas">전진</button>
+</div>
+<div id="rotate"><b>화면을 가로로 돌려 주세요</b><span>폰을 눕히면 조종 버튼과 화면이 넉넉해져요.</span></div>
+
+<div class="overlay" id="start">
+  <div class="card">
+    <div>
+      <h1>우리 집 주행 연습장</h1>
+      <p class="lede">내 RC카를 집 안에서 직접 몰아 보세요. 녹화를 켜고 바닥 테이프 경로를 따라 돌면, DonkeyCar처럼 1초에 20장씩 학습 데이터가 쌓여요.</p>
+      <div class="modes">
+        <button type="button" class="modebtn primary" data-mode="collect"><b>기록 주행 (데이터 수집)</b><small>체크포인트 12개를 순서대로 지나 한 바퀴. 충돌하면 그 기록은 나쁜 데이터예요.</small></button>
+        <button type="button" class="modebtn" data-mode="free"><b>자유 주행</b><small>베란다 경사로, 문턱, 전선, 쿠션, 책 다리, 로봇청소기까지 마음대로 탐험해요.</small></button>
+      </div>
+      <p class="pad" id="padState">게임패드: 연결 안 됨. 블루투스로 연결한 뒤 아무 버튼이나 누르면 잡혀요.</p>
+    </div>
+    <div class="help">
+      <h2>조작 (게임패드는 실제 DonkeyCar 설정과 같아요)</h2>
+      <p class="touchhelp">왼쪽 칸을 좌우로 밀어 조향하고, 오른쪽 버튼으로 전진·후진해요. 녹화·카메라·정지·메뉴 버튼은 가운데 아래에 있어요.</p>
+      <table>
+        <tr><td>조향</td><td>A D / ← →</td><td>왼쪽 스틱</td></tr>
+        <tr><td>전진 / 후진</td><td>W S / ↑ ↓</td><td>RT / LT, 오른쪽 스틱</td></tr>
+        <tr><td>녹화 켜기/끄기</td><td>R</td><td>B</td></tr>
+        <tr><td>비상 정지</td><td>Space</td><td>Y</td></tr>
+        <tr><td>최근 기록 100장 삭제</td><td>X</td><td>X</td></tr>
+        <tr><td>모드 (수동 → AI 조향 → AI 전부)</td><td>Q</td><td>A</td></tr>
+        <tr><td>일정 속도 주행</td><td>O</td><td>Options</td></tr>
+        <tr><td>최대 스로틀 −/+</td><td>[ ]</td><td>LB / RB</td></tr>
+        <tr><td>카메라 바꾸기</td><td>C</td><td>십자키 ← →</td></tr>
+        <tr><td>차 되돌리기</td><td>F</td><td>십자키 ↑</td></tr>
+        <tr><td>일시정지</td><td>Esc / P</td><td>십자키 ↓</td></tr>
+      </table>
+      <div class="opts">
+        <div class="opt"><span>실제 ESC처럼 정지 구간 적용 (스로틀 0.42 미만은 안 움직임)</span><button type="button" class="switch" id="optDead" aria-pressed="true" aria-label="ESC 정지 구간"></button></div>
+        <div class="opt"><span>바닥 테이프 경로 보이기</span><button type="button" class="switch" id="optTape" aria-pressed="true" aria-label="테이프 경로"></button></div>
+        <div class="opt"><span>소리</span><button type="button" class="switch" id="optSound" aria-pressed="true" aria-label="소리"></button></div>
+        <div class="opt"><span>그래픽</span><select id="optQ"><option value="high">높음</option><option value="mid">보통</option><option value="low">낮음</option></select></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pause" hidden>
+  <div class="menu">
+    <h1 style="font-size:40px">일시정지</h1>
+    <button type="button" class="modebtn primary" data-act="resume"><b>계속하기</b></button>
+    <button type="button" class="modebtn" data-act="summary"><b>지금까지 결과 보기</b></button>
+    <button type="button" class="modebtn" data-act="restart"><b>처음부터 다시</b><small>차 위치, 기록, 랩을 모두 초기화해요.</small></button>
+    <button type="button" class="modebtn" data-act="title"><b>시작 화면으로</b></button>
+  </div>
+</div>
+
+<div class="overlay" id="summary" hidden>
+  <div class="menu">
+    <h1 style="font-size:40px">주행 결과</h1>
+    <div class="sum" id="sumGrid"></div>
+    <div id="sumTips"></div>
+    <button type="button" class="modebtn primary" data-act="resume"><b>계속 달리기</b></button>
+    <button type="button" class="modebtn" data-act="restart"><b>처음부터 다시</b></button>
+  </div>
+</div>
+
+<!--THREE-->
+<script>
+/*GAME*/
+</script>
+</body>
+</html>
