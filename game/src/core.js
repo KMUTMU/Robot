@@ -45,6 +45,27 @@ const fillL = new T.DirectionalLight(0xdbe5ff, 0.4);
 fillL.position.set(5200, 5000, 8000);
 fillL.target.position.set(3600, 0, 1750);
 scene.add(fillL, fillL.target);
+// 맵마다 다른 빛과 배경. 맵 정의의 env가 이 기본값(집)을 덮어쓴다
+const ENV_DEFAULT = { bg: 0x20242b, fog: null, hemi: [0xfff4e8, 0x8a6e52, 1.05], sun: { dir: [0.3, -0.58, 0.76], color: 0xffe6c4, int: 3.0 }, fill: { color: 0xdbe5ff, int: 0.4, dir: [0.16, 0.5, 0.625] }, exposure: 1.0, envInt: 0.35, shadowRadius: 2.5 };
+function applyEnv(e0, b) {
+  const e = Object.assign({}, ENV_DEFAULT, e0);
+  scene.background = new T.Color(e.bg);
+  scene.fog = e.fog ? new T.Fog(e.fog[0], e.fog[1], e.fog[2]) : null;
+  hemi.color.set(e.hemi[0]); hemi.groundColor.set(e.hemi[1]); hemi.intensity = e.hemi[2];
+  const cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2, R = Math.hypot(b.x1 - b.x0, b.z1 - b.z0) / 2 + 600;
+  SUN_DIR.set(e.sun.dir[0], e.sun.dir[1], e.sun.dir[2]).normalize();
+  sun.color.set(e.sun.color); sun.intensity = e.sun.int;
+  sun.target.position.set(cx, 0, cz);
+  sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, -(R + 5400));
+  Object.assign(sun.shadow.camera, { left: -R, right: R, top: R, bottom: -R, near: 500, far: R * 2 + 12000 });
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.radius = e.shadowRadius;
+  fillL.color.set(e.fill.color); fillL.intensity = e.fill.int;
+  fillL.target.position.set(cx, 0, cz);
+  fillL.position.set(cx + e.fill.dir[0] * 10000, e.fill.dir[1] * 10000, cz + e.fill.dir[2] * 10000);
+  renderer.toneMappingExposure = e.exposure;
+  scene.environmentIntensity = e.envInt;
+}
 
 /* ================= 텍스처 ================= */
 let rs = 5;
@@ -59,6 +80,9 @@ function ctex(w, h, draw, rep, o = {}) {
   if (rep) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(rep[0], rep[1]); }
   return t;
 }
+// 맵을 처음 열 때만 만드는 텍스처 (이름으로 한 번만 만들어 다시 씀)
+const TXC = new Map();
+const TX = (name, make) => { if (!TXC.has(name)) TXC.set(name, make()); return TXC.get(name); };
 const woodTex = ctex(2048, 2048, (c, w, h) => {
   const rows = 12, pw = h / rows;
   for (let r = 0; r < rows; r++) {
@@ -176,8 +200,9 @@ const aoMat = op => M('ao' + op, () => new T.MeshBasicMaterial({ color: 0x000000
 const stripMat = M('strip', () => new T.MeshBasicMaterial({ color: 0x000000, map: stripTex, transparent: true, opacity: 0.2, depthWrite: false, toneMapped: false }));
 
 /* ================= 세계: 충돌체, 높이 ================= */
-const statics = new T.Group();
-scene.add(statics);
+const statics = new T.Group();   // 움직이지 않는 것: 맵을 다 지은 뒤 재질별로 합친다
+const dyn = new T.Group();       // 맵에 딸린 것 중 합치면 안 되는 것 (하늘, 조명, 움직이는 장식)
+scene.add(statics, dyn);
 const colliders = [];
 const features = { plates: [], ramps: [], adds: [] };
 function addBox(x0, x1, z0, z1, o = {}) {
@@ -220,6 +245,11 @@ function plane(mat, w, d, x, y, z, o = {}) {
   (o.parent || statics).add(m);
   return m;
 }
+// 바닥에 비친 불빛 (더하기 혼합)
+function glow(x, z, w, d, color = 0xffffff, op = 0.35, y = 1.2) {
+  const m = plane(M('glow' + color + op, () => new T.MeshBasicMaterial({ color, map: blobTex, transparent: true, opacity: op, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false })), w, d, x, y, z, { recv: false, order: 3 });
+  return m;
+}
 const ao = (x, z, w, d, op = 0.4, y = 0.6) => plane(aoMat(op), w, d, x, y, z, { recv: false, order: 1 });
 function aoStrip(x0, x1, z0, z1, dir) {
   // dir: 벽이 있는 쪽 'n' 's' 'w' 'e'
@@ -229,10 +259,41 @@ function aoStrip(x0, x1, z0, z1, dir) {
   if (dir === 'w' || dir === 'e') { m.geometry.dispose(); m.geometry = new T.PlaneGeometry(d, w); }
 }
 
-function baseLevel(x, z) {
-  if (z < -150 && z > -1300 && x > 0 && x < 3800) return -100;
-  if (x > 6400 && x < 7200 && z > 3720 && z < 4800) return -120;
-  return 0;
+let baseLevel = () => 0;   // 바닥 높이가 다른 구역(베란다, 현관 ...). 맵이 정함
+// 지형: 높이 격자. 물리와 그림이 같은 삼각형을 쓰므로 바퀴가 땅에 묻히거나 뜨지 않는다
+let hgrid = null;
+function setTerrain(fn, x0, z0, x1, z1, cell) {
+  const nx = Math.ceil((x1 - x0) / cell) + 1, nz = Math.ceil((z1 - z0) / cell) + 1, d = new Float32Array(nx * nz);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) d[j * nx + i] = fn(x0 + i * cell, z0 + j * cell);
+  hgrid = { x0, z0, cell, nx, nz, d };
+}
+function terrainH(x, z) {
+  const g = hgrid, fx = clamp((x - g.x0) / g.cell, 0, g.nx - 1.0001), fz = clamp((z - g.z0) / g.cell, 0, g.nz - 1.0001);
+  const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * g.nx + i;
+  const h00 = g.d[k], h10 = g.d[k + 1], h01 = g.d[k + g.nx], h11 = g.d[k + g.nx + 1];
+  return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+}
+function terrainMesh(mat, uvMm = 1000, colorFn = null) {
+  const g = hgrid, pos = new Float32Array(g.nx * g.nz * 3), uv = new Float32Array(g.nx * g.nz * 2), idx = [];
+  const col = colorFn ? new Float32Array(g.nx * g.nz * 3) : null;
+  for (let j = 0; j < g.nz; j++) for (let i = 0; i < g.nx; i++) {
+    const k = j * g.nx + i, x = g.x0 + i * g.cell, z = g.z0 + j * g.cell;
+    pos[k * 3] = x; pos[k * 3 + 1] = g.d[k]; pos[k * 3 + 2] = z;
+    uv[k * 2] = x / uvMm; uv[k * 2 + 1] = z / uvMm;
+    if (col) { const c3 = colorFn(x, z, g.d[k]); col[k * 3] = c3[0]; col[k * 3 + 1] = c3[1]; col[k * 3 + 2] = c3[2]; }
+    if (i < g.nx - 1 && j < g.nz - 1) idx.push(k, k + g.nx, k + 1, k + 1, k + g.nx, k + g.nx + 1);
+  }
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new T.BufferAttribute(uv, 2));
+  if (col) geo.setAttribute('color', new T.BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const m = new T.Mesh(geo, mat);
+  m.receiveShadow = true;
+  m.userData.keep = true;
+  statics.add(m);
+  return m;
 }
 function plateH(f, x, z) {
   if (x <= f.x0 || x >= f.x1 || z <= f.z0 || z >= f.z1) return 0;
@@ -246,6 +307,7 @@ function segDist(ax, az, bx, bz, x, z) {
 }
 function groundH(x, z) {
   let h = baseLevel(x, z);
+  if (hgrid) h += terrainH(x, z);
   for (const r of features.ramps) {
     if (x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1) {
       const u = r.axis === 'x' ? (x - r.x0) / (r.x1 - r.x0) : (z - r.z0) / (r.z1 - r.z0);
@@ -364,3 +426,9 @@ function mergeInto(root, isDyn, quant = false) {
   }
 }
 
+
+/* ================= 맵 등록 ================= */
+// 맵 하나 = maps/ 폴더의 파일 하나. 각 파일이 MAPS.push({ id, name, ..., build() })로 자기를 등록한다
+const MAPS = [];
+const PROPS = {};          // 밀 수 있는 물건 종류: 이름 → 만드는 함수
+const RS0 = rs;            // 맵을 열 때마다 난수를 이 값으로 되돌려 배치가 매번 같게 한다

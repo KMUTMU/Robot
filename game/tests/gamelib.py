@@ -51,8 +51,10 @@ def open_model(url=None, **kw):
     return Page(url or MODEL_URL, 'window.__rc !== undefined', **kw)
 
 
-AI_LAP = '''([secs, thr]) => {
-  const g = __game; g.start('collect'); g.state.drive = 'local';
+AI_LAP = '''([secs, thr, mapId]) => {
+  const g = __game;
+  if (mapId) g.loadMap(mapId);
+  g.start('collect'); g.state.drive = 'local';
   if (thr) g.state.maxThr = thr;
   for (let t = 0; t < secs; t += 0.25) g.sim(0.25);
   const r = g.sim(0);
@@ -60,6 +62,14 @@ AI_LAP = '''([secs, thr]) => {
 }'''
 
 
-def ai_lap(pg, secs=40, thr=None):
-    """기록 주행을 시작해 AI(local) 모드로 secs초 달린 결과."""
-    return pg.js(AI_LAP, [secs, thr])
+def ai_lap(pg, secs=40, thr=None, map_id=None):
+    """(맵을 바꾸고) 기록 주행을 시작해 AI(local) 모드로 secs초 달린 결과."""
+    return pg.js(AI_LAP, [secs, thr, map_id])
+
+
+FRAMES = '() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))'
+
+
+def frames(pg):
+    """화면이 두 번 그려질 때까지 기다림 (새 메시가 렌더러에 등록되도록)."""
+    return pg.js(FRAMES)
