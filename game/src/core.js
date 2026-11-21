@@ -245,6 +245,27 @@ function plane(mat, w, d, x, y, z, o = {}) {
   (o.parent || statics).add(m);
   return m;
 }
+// 여러 메시로 된 물건용: 그룹(위치·방향)과 그 안에 넣는 메시 (그룹 좌표 기준, +x가 앞), 둥근 상자
+function grp(x, z, ang = 0, y = 0, parent = statics) {
+  const g = new T.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = ang;
+  parent.add(g);
+  return g;
+}
+function part(g, geo, m, x, y, z, rot) {
+  const o = new T.Mesh(geo, m);
+  o.position.set(x, y, z);
+  if (rot) o.rotation.set(rot[0], rot[1], rot[2]);
+  o.castShadow = true; o.receiveShadow = true;
+  g.add(o);
+  return o;
+}
+const rbox = (w, h, d, r) => new X.RoundedBoxGeometry(w, h, d, 3, Math.max(0.5, Math.min(r, w / 2 - 1, h / 2 - 1, d / 2 - 1)));
+// 캔버스에 글자를 써서 만든 그림 (쪽지, 화면 등)
+function textTex(name, w, h, bg, draw) {
+  return TX(name, () => ctex(w, h, (c2, cw, chh) => { c2.fillStyle = bg; c2.fillRect(0, 0, cw, chh); draw(c2, cw, chh); }));
+}
 // 바닥에 비친 불빛 (더하기 혼합)
 function glow(x, z, w, d, color = 0xffffff, op = 0.35, y = 1.2) {
   const m = plane(M('glow' + color + op, () => new T.MeshBasicMaterial({ color, map: blobTex, transparent: true, opacity: op, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false })), w, d, x, y, z, { recv: false, order: 3 });

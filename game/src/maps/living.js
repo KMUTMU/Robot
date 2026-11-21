@@ -5,24 +5,6 @@
 {
 const RW = 6400, RD = 7400, CH = 2400;
 const mat = (name, color, rough = 0.7, o = {}) => std('lv' + name, { color, roughness: rough, ...o });
-// 그룹 안에 메시 하나 넣기 (그룹 좌표 기준, +x가 앞)
-function part(g, geo, m, x, y, z, rot) {
-  const o = new T.Mesh(geo, m);
-  o.position.set(x, y, z);
-  if (rot) o.rotation.set(rot[0], rot[1], rot[2]);
-  o.castShadow = true; o.receiveShadow = true;
-  g.add(o);
-  return o;
-}
-function group(x, z, ang) {
-  const g = new T.Group();
-  g.position.set(x, 0, z);
-  g.rotation.y = ang;
-  statics.add(g);
-  return g;
-}
-const rbox = (w, h, d, r) => new X.RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2 - 1, h / 2 - 1, d / 2 - 1));
-
 function panelWall(x0, x1, z0, z1) {
   const tex = TX('lvPanel', () => ctex(256, 512, (c, w, h) => {
     c.fillStyle = '#d6bf9d'; c.fillRect(0, 0, w, h);
@@ -59,7 +41,7 @@ function tallPlant(x, z) {
 }
 // 좌식 의자 (남색). ang: 앉는 사람이 보는 방향
 function floorChair(x, z, ang, withPerson) {
-  const g = group(x, z, ang), navy = mat('Navy', 0x1d2c52, 0.92);
+  const g = grp(x, z, ang), navy = mat('Navy', 0x1d2c52, 0.92);
   part(g, rbox(520, 90, 500, 36), navy, 20, 45, 0);
   part(g, rbox(100, 640, 500, 40), navy, -235, 340, 0, [0, 0, 0.3]);
   if (withPerson) {
@@ -81,7 +63,7 @@ function floorChair(x, z, ang, withPerson) {
   ao(x, z, 760, 760, 0.4);
 }
 function spinBike(x, z, ang, dark) {
-  const g = group(x, z, ang), K = mat('BikeK', 0x17181b, 0.45, { metalness: 0.3 }), W = mat('BikeW', dark ? 0x2a2c30 : 0xe9e9e6, 0.4), S = mat('BikeS', 0x9da2a8, 0.3, { metalness: 0.8 });
+  const g = grp(x, z, ang), K = mat('BikeK', 0x17181b, 0.45, { metalness: 0.3 }), W = mat('BikeW', dark ? 0x2a2c30 : 0xe9e9e6, 0.4), S = mat('BikeS', 0x9da2a8, 0.3, { metalness: 0.8 });
   for (const xx of [-480, 480]) part(g, rbox(90, 60, 520, 20), K, xx, 30, 0);
   part(g, rbox(1000, 70, 80, 20), K, 0, 80, 0);
   part(g, new T.CylinderGeometry(235, 235, 46, 40), K, 300, 290, 0, [Math.PI / 2, 0, 0]);
@@ -100,7 +82,7 @@ function spinBike(x, z, ang, dark) {
   return [c, s];
 }
 function standFan(x, z, ang) {
-  const g = group(x, z, ang), F = mat('Fan', 0xf2f2ef, 0.4);
+  const g = grp(x, z, ang), F = mat('Fan', 0xf2f2ef, 0.4);
   part(g, new T.CylinderGeometry(175, 185, 30, 32), F, 0, 15, 0);
   part(g, new T.CylinderGeometry(15, 15, 950, 10), F, 0, 500, 0);
   part(g, new T.CylinderGeometry(75, 85, 150, 20), F, -20, 1040, 0, [0, 0, Math.PI / 2]);

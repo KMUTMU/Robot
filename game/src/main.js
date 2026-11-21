@@ -566,7 +566,7 @@ function physicsStep(dt) {
   for (const p of props) {
     for (const lx of CAR_CIRCLES) {
       const px = car.x + lx * c, pz = car.z - lx * s, dx = p.x - px, dz = p.z - pz, d = Math.hypot(dx, dz), pen = CAR_R + p.r - d;
-      if (pen <= 0 || d < 1e-6) continue;
+      if (pen <= 0 || d < 1e-6 || Math.abs((p.py ?? car.py) - car.py) > 160) continue;
       const nx = dx / d, nz = dz / d;
       p.x += nx * pen; p.z += nz * pen;
       const cn = wvx * nx + wvz * nz, pn = p.vx * nx + p.vz * nz;
@@ -583,6 +583,10 @@ function physicsStep(dt) {
 function propsStep(dt) {
   for (const p of props) {
     p.x += p.vx * dt; p.z += p.vz * dt;
+    // 높이: 오르막은 땅을 따라가고, 땅이 꺼지면(책상 끝, 현관) 떨어진다
+    const gh = groundH(p.x, p.z);
+    if (p.py == null || p.py <= gh + 0.5) { p.py = gh; p.vy = 0; }
+    else { p.vy -= PH.g * dt; p.py += p.vy * dt; if (p.py <= gh) { p.py = gh; p.vy = 0; } }
     const f = Math.exp(-p.fr * dt);
     p.vx *= f; p.vz *= f; p.spin *= Math.exp(-3 * dt);
     p.ry += p.spin * dt;
@@ -1078,7 +1082,7 @@ function togglePause() {
 function resetGame() {
   Object.assign(state, { rec: false, constant: false, drive: 'user', maxThr: parseFloat(spSel.value), records: 0, bad: [], recAcc: 0, lastCrash: -99, crashes: 0, deleted: 0, time: 0, cp: 1, lap: 0, lapStart: 0, laps: [], best: null, routeIdx: 0, offTrack: false, fell: 0 });
   placeCar(START.x, START.z, START.yaw);
-  for (const p of props) { p.x = p.x0; p.z = p.z0; p.vx = p.vz = p.spin = 0; }
+  for (const p of props) { p.x = p.x0; p.z = p.z0; p.vx = p.vz = p.spin = 0; p.py = null; p.vy = 0; if (p.reset) p.reset(); }
   for (const mv of movers) mv.reset();
   if (world.hooks && world.hooks.reset) world.hooks.reset();
   placeGate(1);
@@ -1184,7 +1188,7 @@ function syncVisuals(dt) {
   carShadow.material.opacity = 0.55 / (1 + lift / 220);
   carShadow.scale.setScalar(1 + lift / 900);
   for (const p of props) {
-    p.mesh.position.set(p.x, groundH(p.x, p.z) + p.yoff, p.z);
+    p.mesh.position.set(p.x, (p.py ?? groundH(p.x, p.z)) + p.yoff, p.z);
     if (p.kind === 'ball') {
       const sp = Math.hypot(p.vx, p.vz);
       if (sp > 1) p.mesh.rotateOnWorldAxis(V(p.vz / sp, 0, -p.vx / sp), (sp * dt) / p.r);

@@ -168,3 +168,36 @@ def test_car_camera_view_shows_a_picture(game, tmp_path):
     w, h = Image.open(shot).size
     mean = ImageStat.Stat(Image.open(shot).convert('L').crop((w // 4, h // 4, 3 * w // 4, 3 * h // 4))).mean[0]
     assert mean > 20, mean
+
+
+# ---------------------------------------------------------------- 맵: 거인의 책상
+def test_desk_ai_lap_without_falling(game):
+    r = gamelib.ai_lap(game, 60, map_id='desk')
+    assert r['laps'] and r['crashes'] == 0 and r['fell'] == 0, r
+    assert game.logs == [], game.logs
+
+
+def test_desk_driving_off_the_edge_falls_and_returns(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('desk'); g.start('free'); g.state.maxThr = 1;
+      g.placeCar(4500, 4550, -Math.PI / 2);                 // 남쪽(책상 앞 끝)을 향함
+      let minY = 0, sawAir = false;
+      for (let i = 0; i < 480; i++) { g.sim(1 / 120, 0, 1); minY = Math.min(minY, g.car.py); sawAir = sawAir || g.car.air; if (g.state.fell) break; }
+      return { fell: g.state.fell, minY, sawAir, z: g.car.z, air: g.car.air, py: g.car.py, wavg: g.car.wh.reduce((a, b) => a + b) / 4, hud: g.world().hooks.hud() };
+    }''')
+    assert r['fell'] == 1 and r['sawAir'] and r['minY'] < -1400, r
+    assert r['air'] is False and 0 < r['z'] < 5000 and abs(r['py'] - r['wavg']) < 1, r
+    assert r['hud'][1] == '1번', r
+
+
+def test_prop_falls_off_desk(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('desk'); g.start('free');
+      const p = g.props.find(q => q.kind === 'eraser');
+      p.x = 4500; p.z = 4850; p.vx = 0; p.vz = 900;
+      g.sim(4, 0, 0);
+      return { x: p.x, z: p.z, py: p.py, vz: p.vz, vy: p.vy, floor: g.groundH(p.x, p.z) };
+    }''')
+    assert all(isinstance(r[k], (int, float)) and r[k] == r[k] for k in ('x', 'z', 'py', 'vz', 'vy')), r
+    assert r['z'] > 5000 and abs(r['py'] - r['floor']) < 1 and r['floor'] < -4000, r
+    assert abs(r['vz']) < 5 and r['vy'] == 0, r
