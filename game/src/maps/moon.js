@@ -166,7 +166,7 @@ function boulder(x, z, r, seed, collide = true) {
   if (collide) addCircle(x, z, r * 0.8, { tall: false });
 }
 PROPS.rock = o => ({ mesh: new T.Mesh(rockGeo(o.r, o.seed), rockMat()), r: o.r * 0.82, m: 0.3, fr: 1.3, rest: 0.25, yoff: o.r * 0.26 });
-PROPS.golf = () => ({ mesh: new T.Mesh(new T.SphereGeometry(30, 16, 12), std('mnGolf', { color: 0xfafafa, roughness: 0.4 })), r: 30, m: 0.05, fr: 0.3, rest: 0.6, yoff: 30 });
+PROPS.golf = () => ({ mesh: new T.Mesh(new T.SphereGeometry(30, 16, 12), std('mnGolf', { color: 0xfafafa, roughness: 0.4 })), r: 30, m: 0.05, fr: 0.3, rest: 0.6, yoff: 30, roll: true });
 
 function lander(x, z, ang) {
   const g = grp(x, z, ang, groundH(x, z)), ca = Math.cos(ang), sa = Math.sin(ang);

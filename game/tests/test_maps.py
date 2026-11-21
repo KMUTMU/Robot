@@ -315,3 +315,75 @@ def test_chase_camera_snaps_behind_the_car_after_a_teleport(game):
       return Math.hypot(c.x - g.car.x, c.z - g.car.z);
     }''')
     assert d < 1500, d
+
+
+# ---------------------------------------------------------------- 맵: 볼링장
+# 레인 가운데 z = 1460 / 3000 / 4540, 파울 라인 x 2600, 맨 앞 핀 x 7908, 뒷벽 x 8880. 핀은 kind 'pin', lane 0~2
+BOWL_RUN = '''() => {
+  const g = __game; g.loadMap('bowling'); g.start('free'); g.state.maxThr = 1;
+  const pins = g.props.filter(p => p.kind === 'pin' && p.lane === 0), down = () => pins.filter(p => p.down).length;
+  g.placeCar(5200, 1460, 0);
+  g.sim(3, 0, 1); const down3 = down();
+  g.sim(2.5, 0, -1); const xBack = g.car.x;          // 핀 자리에서 뒤로 빠져나옴
+  g.sim(6.5, 0, 0);                                  // 시작한 지 12초
+  return { id: g.world().id, n: pins.length, down3, xBack, down12: down(), moved: Math.max(...pins.map(p => Math.hypot(p.x - p.x0, p.z - p.z0))),
+    others: g.props.filter(p => p.kind === 'pin' && p.lane !== 0 && p.down).length, hud: g.world().hooks.hud(), fell: g.state.fell };
+}'''
+BOWL_TAP = '''([mode]) => {
+  const g = __game; g.loadMap('bowling'); g.start(mode); g.state.maxThr = 1;
+  g.placeCar(7500, 1460, 0); g.sim(0.7, 0, 1); g.sim(0.8, 0, 0);
+  return { id: g.world().id, down: g.props.filter(p => p.kind === 'pin' && p.down).length, crashes: g.state.crashes, sinceCrash: g.state.time - g.state.lastCrash,
+    x: g.car.x, toasts: document.querySelector('#toasts').textContent };
+}'''
+
+
+def test_bowling_pins(game):
+    """차가 볼링공: 1번 레인 가운데로 전속 → 3초 뒤 핀 5개 이상 쓰러지고, 차가 비킨 뒤(첫 핀이 쓰러지고 7초 뒤) 10개가 다시 섬."""
+    r = game.js(BOWL_RUN)
+    assert r['id'] == 'bowling' and r['n'] == 10, r
+    assert r['down3'] >= 5, r
+    assert r['xBack'] < 7400, r
+    assert r['down12'] == 0 and r['moved'] < 1, r
+    assert r['others'] == 0 and r['fell'] == 0, r
+    assert r['hud'][0] == '볼링' and '핀' in r['hud'][1] and '스트라이크' in r['hud'][1], r
+    assert int(r['hud'][1].split('핀 ')[1].split('개')[0]) >= r['down3'], r
+
+
+def test_bowling_lap(game):
+    r = gamelib.ai_lap(game, 40, map_id='bowling')
+    assert game.js('() => __game.world().id') == 'bowling'
+    assert r['laps'] and r['crashes'] == 0 and r['fell'] == 0, r
+    assert game.js("() => __game.props.filter(p => p.kind === 'pin' && p.down).length") == 0   # 로비 한 바퀴는 핀을 건드리지 않음
+    assert game.logs == [], game.logs
+
+
+def test_bowling_pin_hit_is_bad_data_only_in_collect_mode(game):
+    """자유 주행에서는 핀을 치는 게 놀이지만, 기록 주행(데이터 모으기 연습)에서는 부딪힌 것으로 셈."""
+    free = game.js(BOWL_TAP, ['free'])
+    assert free['id'] == 'bowling' and free['down'] >= 1 and free['crashes'] == 0, free
+    col = game.js(BOWL_TAP, ['collect'])
+    assert col['down'] >= 1 and col['crashes'] >= 1 and col['sinceCrash'] < 1.6, col
+    assert '볼링핀과 부딪혔어요' in col['toasts'], col      # 받침이 있으면 '과'
+
+
+def test_bowling_ball_can_be_pushed_down_the_lane(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('bowling'); g.start('free'); g.state.maxThr = 1;
+      const b = g.props.filter(p => p.kind === 'bowl').sort((p, q) => Math.abs(p.z - 3000) - Math.abs(q.z - 3000))[0];
+      g.placeCar(b.x - 520, b.z, 0); g.sim(3, 0, 1);
+      return { x0: b.x0, x: b.x, vx: b.vx, carX: g.car.x, crashes: g.state.crashes };
+    }''')
+    assert r['x'] - r['x0'] > 2000 and r['vx'] > 400, r             # 무겁지만 밀면 레인을 따라 굴러감
+    assert r['crashes'] == 0, r
+
+
+def test_bowling_gutter_is_a_channel_the_car_can_cross(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('bowling'); g.start('free'); g.state.maxThr = 1;
+      const h = { lane: g.groundH(5000, 1460), gutter: g.groundH(5000, 1460 - 652.5), ridge: g.groundH(5000, 2230), lobby: g.groundH(1000, 3000) };
+      g.placeCar(5000, 1460, Math.PI / 2); g.sim(2.2, 0, 0.6);     // 레인에서 북쪽 거터를 건너 옆 통로로
+      return { h, z: g.car.z, py: g.car.py, crashes: g.state.crashes, fell: g.state.fell };
+    }''')
+    assert abs(r['h']['lane']) < 0.5 and abs(r['h']['ridge']) < 0.5 and abs(r['h']['lobby']) < 0.5, r
+    assert -50 < r['h']['gutter'] < -38, r                          # 거터는 깊이 45mm쯤의 둥근 홈
+    assert r['z'] < 640 and abs(r['py']) < 3 and r['crashes'] == 0 and r['fell'] == 0, r

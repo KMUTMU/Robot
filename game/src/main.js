@@ -615,11 +615,13 @@ function propsStep(dt) {
   }
 }
 /* ================= 기록, 체크포인트, 랩 ================= */
+// 이름 뒤에 붙는 말: 받침이 있으면 '과', 없으면 '와' (볼링핀과, 고양이와)
+const withJosa = w => { const c = w.charCodeAt(w.length - 1) - 0xac00; return w + (c >= 0 && c <= 11171 && c % 28 ? '과' : '와'); };
 function crash(speed, what = '') {
   state.crashes++;
   state.lastCrash = state.time;
   thud(Math.min(1, speed / 600));
-  const hit = what ? `${what}와 부딪혔어요` : '쾅! 부딪혔어요';
+  const hit = what ? `${withJosa(what)} 부딪혔어요` : '쾅! 부딪혔어요';
   if (state.playing) toast(state.rec ? `${hit}. 이 근처 기록은 나쁜 데이터예요. X로 지울 수 있어요` : hit, 'warn');
 }
 let bumpT = 0;
@@ -1192,7 +1194,7 @@ function syncVisuals(dt) {
   carShadow.scale.setScalar(1 + lift / 900);
   for (const p of props) {
     p.mesh.position.set(p.x, (p.py ?? groundH(p.x, p.z)) + p.yoff, p.z);
-    if (p.kind === 'ball') {
+    if (p.roll) {
       const sp = Math.hypot(p.vx, p.vz);
       if (sp > 1) p.mesh.rotateOnWorldAxis(V(p.vz / sp, 0, -p.vx / sp), (sp * dt) / p.r);
     } else p.mesh.rotation.y = p.ry;
