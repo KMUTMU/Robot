@@ -21,7 +21,7 @@ const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 /*CAR*/
 
 const QUALITY = { high: { pr: 2, shadow: 4096 }, mid: { pr: 1.5, shadow: 2048 }, low: { pr: 1, shadow: 1024 } };
-const opt = { dead: true, tape: true, sound: true, keys: true, speed: 0.8, quality: isTouch ? 'low' : 'mid' };
+const opt = { dead: true, tape: true, sound: true, tint: true, keys: true, speed: 0.8, quality: isTouch ? 'low' : 'mid' };
 
 /* ================= 장면과 빛 ================= */
 const scene = new T.Scene();

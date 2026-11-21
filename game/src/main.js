@@ -122,7 +122,10 @@ function applySteer(a) {
   rig.dragEnds[0].position.copy(h);
   rig.dragEnds[1].position.copy(k);
 }
-const pipCam = new T.PerspectiveCamera(72, 4 / 3, 12, 30000);
+// 차 카메라: 실제 차는 광각(160° 렌즈, 센서 전체)이라 넓게 찍은 뒤 둥글게 휘어 보이게 한다 (아래 LENS)
+// 화면 반지름 r(가로 끝 = 1)이 시선에서 벗어난 각도 kTheta·r 에 해당. 모서리(r 1.25)가 68°
+const LENS = { kTheta: deg(68) / 1.25, rectHalf: Math.tan(deg(68)) * 0.8 };
+const pipCam = new T.PerspectiveCamera((2 * Math.atan(LENS.rectHalf * 0.75) * 180) / Math.PI, 4 / 3, 12, 30000);
 pipCam.position.set(18, 0, 0);
 pipCam.rotation.set(0, -Math.PI / 2, 0);
 rig.camHead.add(pipCam);
@@ -783,6 +786,9 @@ function updateHud() {
   ui.maxThr.textContent = state.maxThr.toFixed(2);
   ui.kRec.classList.toggle('rec', state.rec);
   ui.kConst.classList.toggle('hold', state.constant);
+  const ch = world.hooks && world.hooks.hud ? world.hooks.hud() : null;
+  ui.chalRow.hidden = !ch;
+  if (ch) { ui.chalLabel.textContent = ch[0]; ui.chalText.textContent = ch[1]; }
   ui.dead.textContent = state.deadZone ? `ESC 정지 구간 (PWM ${epwm}): 바퀴가 안 돌아요` : state.stutter ? '정지 구간 근처: 덜덜거리며 가요' : state.constant ? '일정 속도 주행 중 (O / Options로 끄기)' : '';
 }
 
@@ -851,11 +857,29 @@ orbit.minDistance = 250;
 orbit.maxDistance = 9000;
 const chase = { pos: V(), tgt: V(), init: false };
 const orthoCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-const rtHi = new T.WebGLRenderTarget(320, 240, { samples: 4, type: T.HalfFloatType });
+const rtHi = new T.WebGLRenderTarget(512, 384, { samples: 4, type: T.HalfFloatType });
 const rtLo = new T.WebGLRenderTarget(160, 120, { type: T.HalfFloatType, magFilter: T.NearestFilter, minFilter: T.LinearFilter });
 const quadLo = new T.Scene(), quadOut = new T.Scene();
-quadLo.add(new T.Mesh(new T.PlaneGeometry(2, 2), new T.MeshBasicMaterial({ map: rtHi.texture, toneMapped: false, depthTest: false, depthWrite: false })));
+// 넓게 찍은 그림(rtHi)을 어안 렌즈처럼 휘어 160×120으로 줄인다. tint 1이면 실제 카메라처럼 가운데 초록빛·가장자리 자홍빛
+const lensMat = new T.ShaderMaterial({
+  uniforms: { map: { value: rtHi.texture }, kTheta: { value: LENS.kTheta }, rectHalf: { value: LENS.rectHalf }, tint: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D map; uniform float kTheta, rectHalf, tint; varying vec2 vUv;
+    void main() {
+      vec2 p = (vUv - 0.5) * vec2(2.0, 1.5);
+      float r = length(p);
+      float k = r > 1e-4 ? tan(r * kTheta) / r : kTheta;
+      vec2 q = p * k / rectHalf;
+      vec3 c = texture2D(map, vec2(q.x * 0.5 + 0.5, q.y / 1.5 + 0.5)).rgb;
+      vec3 lens = mix(vec3(0.80, 1.0, 0.89), vec3(1.0, 0.62, 0.96), smoothstep(0.2, 1.2, r));
+      gl_FragColor = vec4(c * mix(vec3(1.0), lens, tint), 1.0);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+quadLo.add(new T.Mesh(new T.PlaneGeometry(2, 2), lensMat));
 quadOut.add(new T.Mesh(new T.PlaneGeometry(2, 2), new T.MeshBasicMaterial({ map: rtLo.texture, depthTest: false, depthWrite: false })));
+const tintOn = () => !!(world && world.lensTint && opt.tint);
 
 function carPos() { return V(car.x, car.y, car.z); }
 function headingVec() { return V(Math.cos(car.yaw), 0, -Math.sin(car.yaw)); }
@@ -1099,7 +1123,7 @@ document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click',
   else if (a === 'restart') { resetGame(); state.paused = false; ui.pause.hidden = true; ui.summary.hidden = true; if (ac) ac.resume(); }
   else if (a === 'title') { document.body.classList.remove('playing'); state.playing = false; state.paused = false; ui.pause.hidden = true; ui.hud.hidden = true; ui.touch.hidden = true; ui.start.hidden = false; resetGame(); }
 }));
-for (const [id, k] of [['#optDead', 'dead'], ['#optTape', 'tape'], ['#optSound', 'sound']]) {
+for (const [id, k] of [['#optDead', 'dead'], ['#optTape', 'tape'], ['#optSound', 'sound'], ['#optTint', 'tint']]) {
   $(id).addEventListener('click', e => {
     opt[k] = !opt[k];
     e.currentTarget.setAttribute('aria-pressed', String(opt[k]));
@@ -1211,6 +1235,7 @@ function frame(now) {
     renderer.setRenderTarget(rtHi);
     renderer.render(scene, pipCam);
     renderer.setRenderTarget(rtLo);
+    lensMat.uniforms.tint.value = tintOn() ? 1 : 0;
     renderer.render(quadLo, orthoCam);
     gateMesh.visible = state.playing && state.mode === 'collect';
   }
@@ -1306,7 +1331,9 @@ function sim(sec, steer = 0, thr = 0) {
 // 브라우저 콘솔과 game/tests 에서 쓰는 시험용 손잡이
 window.__game = {
   state, car, props, movers, opt, start: startGame, groundH, colliders, placeCar, resetCar, sim, setView: v => { debugView = v; }, info: () => renderer.info.render, scene, car3d, statics, dyn,
-  loadMap, maps: () => MAPS.map(d => d.id), world: () => world, PH: () => PH,
+  loadMap, maps: () => MAPS.map(d => d.id), world: () => world, PH: () => PH, tintOn,
+  renderer, rtLo, rtHi, lensMat,
+  camInfo: () => ({ fisheye: true, hfov: (2 * LENS.kTheta * 180) / Math.PI, dfov: (2.5 * LENS.kTheta * 180) / Math.PI }),
   counts: () => ({ colliders: colliders.length, props: props.length, movers: movers.length, statics: statics.children.length, dyn: dyn.children.length, scene: scene.children.length, geometries: renderer.info.memory.geometries }),
   get route() { return RP; }, get START() { return START; },
   get vac() { return movers.find(mv => mv.kind === 'vac'); }, get cat() { return movers.find(mv => mv.kind === 'cat'); },
