@@ -369,20 +369,24 @@ function rayWall(x0, z0, x1, z1) {
 /* ================= 차 상태와 물리 ================= */
 const L_WB = 190, TRACK = 88, R_TIRE = 35.5;
 // 맵마다 바뀌는 물리값 (맵 정의의 phys가 덮어씀). 기본값이면 개편 전과 같은 주행
-const PH_DEFAULT = { vmax: 1600, vrev: 1100, dmax: deg(25) };
+// vmax·vrev 최고 속도(mm/s), dmax 최대 조향각, g 중력, aLat 옆으로 버티는 가속도(작으면 미끄러짐), aLong 가감속 한계(작으면 헛바퀴),
+// bounce 착지 때 튀는 비율, killY 이 높이 아래로 떨어지면 되돌림
+const PH_DEFAULT = { vmax: 1600, vrev: 1100, dmax: deg(25), g: 9810, aLat: 9810, aLong: 1e9, bounce: 0, killY: -1e9 };
 const PH = Object.assign({}, PH_DEFAULT);
 let world = null;   // 지금 열려 있는 맵 정의
 const CAR_CIRCLES = [-112, 0, 112], CAR_R = 60, CAR_MASS = 1.2;
-const car = { x: 0, z: 0, yaw: 0, v: 0, delta: 0, wh: [0, 0, 0, 0], y: 0, pitch: 0, roll: 0, spin: 0, stuckT: 0 };
+// v 앞 방향 속도, vl 왼쪽 방향(옆) 속도, py 바퀴 바닥의 실제 높이, vy 수직 속도, air 공중 여부, y·pitch·roll 은 그리기용
+const car = { x: 0, z: 0, yaw: 0, v: 0, vl: 0, delta: 0, wh: [0, 0, 0, 0], y: 0, py: 0, vy: 0, air: false, airT: 0, airX: 0, airZ: 0, landed: false, wheelV: 0, pitch: 0, roll: 0, spin: 0, stuckT: 0 };
 function wheelPts(x, z, yaw) {
   const c = Math.cos(yaw), s = Math.sin(yaw), out = [];
   for (const [lx, lz] of [[95, -44], [95, 44], [-95, -44], [-95, 44]]) out.push([x + lx * c + lz * s, z - lx * s + lz * c]);
   return out;
 }
 function placeCar(x, z, yaw) {
-  car.x = x; car.z = z; car.yaw = yaw; car.v = 0; car.delta = 0;
+  car.x = x; car.z = z; car.yaw = yaw; car.v = 0; car.vl = 0; car.delta = 0;
   car.wh = wheelPts(x, z, yaw).map(([wx, wz]) => groundH(wx, wz));
-  car.y = car.wh.reduce((a, b) => a + b) / 4;
+  car.y = car.py = car.wh.reduce((a, b) => a + b) / 4;
+  car.vy = 0; car.air = false; car.airT = 0; car.landed = false; car.wheelV = 0;
   car.pitch = 0; car.roll = 0;
 }
 const input = { steer: 0, thr: 0 };
@@ -424,12 +428,50 @@ function autopilotSteer() {
 }
 
 let lastImpact = 0;
+// 착지: 처음 닿을 때 한 번 알리고(onLand), 맵이 튀게 해 두었으면(bounce) 조금 다시 뜬다
+function touchDown(gy) {
+  const vImpact = -car.vy;
+  car.py = gy;
+  if (!car.landed) {
+    car.landed = true;
+    if (car.airT > 0.12 || vImpact > 500) thud(Math.min(1, vImpact / 2600));
+    if (world.hooks && world.hooks.onLand) world.hooks.onLand(car.airT, Math.hypot(car.x - car.airX, car.z - car.airZ));
+  }
+  if (PH.bounce > 0 && vImpact * PH.bounce > 160) { car.vy = vImpact * PH.bounce; return; }
+  car.vy = 0; car.air = false; car.landed = false;
+}
+// 수직 운동: 땅이 중력보다 빨리 꺼지면 뜨고, 뜬 동안은 포물선
+function verticalStep(dt, gy) {
+  if (!car.air) {
+    const yFree = car.py + car.vy * dt - 0.5 * PH.g * dt * dt;
+    if (gy < yFree - 1.5) {
+      car.air = true; car.airT = 0; car.landed = false; car.airX = car.x; car.airZ = car.z;
+      car.py = yFree; car.vy -= PH.g * dt;
+    } else {
+      car.vy = (gy - car.py) / dt;
+      car.py = gy;
+    }
+  } else {
+    car.airT += dt;
+    car.vy -= PH.g * dt;
+    car.py += car.vy * dt;
+    if (car.py <= gy) touchDown(gy);
+  }
+}
+function fellOff() {
+  state.fell++;
+  state.crashes++;
+  state.lastCrash = state.time;
+  thud(0.8);
+  resetCar(true);
+  if (state.playing) toast(`${world.fellMsg || '아래로 떨어졌어요.'} 경로 위로 되돌렸어요`, 'warn');
+}
 function physicsStep(dt) {
   const t = state.time;
   // 명령
   let steerCmd = input.steer, thrCmd = input.thr;
   if (state.drive !== 'user') steerCmd = autopilotSteer();
-  if (state.drive === 'local' || state.constant) thrCmd = 1;
+  if (state.drive === 'local' || state.constant) thrCmd = state.drive === 'local' ? (world.aiThr || 1) : 1;
   const u = thrCmd * state.maxThr;
   car.u = u;
   car.steerCmd = steerCmd;
@@ -438,51 +480,71 @@ function physicsStep(dt) {
   const prevDelta = car.delta;
   car.delta += clamp(dTarget - car.delta, -rate, rate);
   car.steerRate = (car.delta - prevDelta) / dt;
-  // 속도
+  // 속도 (공중에서는 바퀴가 헛돌 뿐 차 속도는 그대로)
   let vt = motorTarget(u);
   if (state.stutter) vt *= 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 8));
   const slope = car.pitch;
   if (vt !== 0) vt *= clamp(1 - Math.sin(slope) * 2.2 * Math.sign(vt), 0.3, 1.25);
-  const same = Math.sign(vt) === Math.sign(car.v) || car.v === 0;
-  const acc = vt === 0 ? 2400 : same && Math.abs(vt) > Math.abs(car.v) ? 1600 : 2600;
-  car.v += clamp(vt - car.v, -acc * dt, acc * dt);
-  if (Math.abs(car.v) < 2 && vt === 0) car.v = 0;
+  if (!car.air) {
+    const same = Math.sign(vt) === Math.sign(car.v) || car.v === 0;
+    const acc = Math.min(vt === 0 ? 2400 : same && Math.abs(vt) > Math.abs(car.v) ? 1600 : 2600, PH.aLong);
+    car.v += clamp(vt - car.v, -acc * dt, acc * dt);
+    if (Math.abs(car.v) < 2 && vt === 0) car.v = 0;
+  }
+  car.wheelV = car.air || PH.aLong < 5000 ? lerp(car.v, vt, 0.7) : car.v;
+  // 방향과 옆 미끄러짐. 옆으로 버티는 힘(aLat)이 모자라면 덜 돌고, 남은 옆 속도로 미끄러진다
+  const aLat = world.gripAt ? world.gripAt(car.x, car.z) : PH.aLat;
+  let omega = car.air ? 0 : (car.v * Math.tan(car.delta)) / L_WB;
+  if (aLat < 9000 && !car.air) {
+    const need = Math.abs(car.v * omega);
+    if (need > 1) omega *= clamp((aLat * 1.6) / need, 0.45, 1);
+  }
+  const dpsi = omega * dt, yaw2 = car.yaw + dpsi;
+  if (!car.air && (aLat < 9000 || car.vl !== 0)) {
+    const cs = Math.cos(dpsi), sn = Math.sin(dpsi);
+    const vF = car.v * cs + car.vl * sn, vL = -car.v * sn + car.vl * cs;
+    car.v = vF;
+    car.vl = vL - clamp(vL, -aLat * dt, aLat * dt);
+  }
   // 이동 후보
-  const yaw2 = car.yaw + (car.v * Math.tan(car.delta) / L_WB) * dt;
-  let x2 = car.x + car.v * Math.cos(yaw2) * dt, z2 = car.z - car.v * Math.sin(yaw2) * dt;
-  // 턱 검사 (바퀴가 한 번에 24mm 넘게 올라가면 막힘)
+  const c2 = Math.cos(yaw2), s2 = Math.sin(yaw2);
+  let x2 = car.x + (car.v * c2 - car.vl * s2) * dt, z2 = car.z - (car.v * s2 + car.vl * c2) * dt;
+  // 턱 검사 (바퀴가 한 번에 24mm 넘게 올라가면 막힘. 공중이면 지금 높이 기준)
   const wp = wheelPts(x2, z2, yaw2), wh2 = wp.map(([wx, wz]) => groundH(wx, wz));
   let blocked = false;
-  for (let i = 0; i < 4; i++) if (wh2[i] - car.wh[i] > 24) blocked = true;
+  for (let i = 0; i < 4; i++) if (wh2[i] - (car.air ? car.py : car.wh[i]) > 24) blocked = true;
   if (blocked) {
     if (Math.abs(car.v) > 120) bump(Math.abs(car.v));
-    car.v = 0;
+    car.v = 0; car.vl = 0;
     car.stuckT += dt;
+    if (car.air) { verticalStep(dt, (car.wh[0] + car.wh[1] + car.wh[2] + car.wh[3]) / 4); if (car.py < PH.killY) fellOff(); }
     return;
   }
   car.x = x2; car.z = z2; car.yaw = yaw2; car.wh = wh2;
   // 벽, 가구와 충돌
   const c = Math.cos(car.yaw), s = Math.sin(car.yaw);
+  const wvx = car.v * c - car.vl * s, wvz = -car.v * s - car.vl * c;
   let impact = 0, impactWhat = '';
   for (let pass = 0; pass < 2; pass++) {
     for (const lx of CAR_CIRCLES) {
       const px = car.x + lx * c, pz = car.z - lx * s;
       const list = nearby(px, pz, CAR_R + 10);
       for (const col of list) {
+        if (col.top != null && car.py > col.top) continue;   // 낮은 것은 뛰어넘을 수 있음
         const h = circleHit(col, px, pz, CAR_R);
         if (!h) continue;
         car.x += h[0] * h[2];
         car.z += h[1] * h[2];
-        const into = -(car.v * c * h[0] - car.v * s * h[1]);
-        if (into > impact) { impact = into; impactWhat = ''; }
+        const into = -(wvx * h[0] + wvz * h[1]);
+        if (into > impact) { impact = into; impactWhat = col.name || ''; }
       }
-      // 로봇청소기, 고양이
+      // 로봇청소기, 고양이 같은 움직이는 것
       for (const m of movers) {
         const dx = px - m.x, dz = pz - m.z, d = Math.hypot(dx, dz), pen = CAR_R + m.r - d;
         if (pen <= 0 || d < 1e-6) continue;
         car.x += (dx / d) * pen * (1 - m.share); car.z += (dz / d) * pen * (1 - m.share);
         m.x -= (dx / d) * pen * m.share; m.z -= (dz / d) * pen * m.share;
-        const into = -(car.v * c * (dx / d) - car.v * s * (dz / d));
+        const into = -(wvx * (dx / d) + wvz * (dz / d));
         if (into > impact) { impact = into; impactWhat = m.name; }
         m.onHit(into);
       }
@@ -490,10 +552,13 @@ function physicsStep(dt) {
   }
   if (impact > 0) {
     car.v *= impact > 150 ? -0.15 : 0.35;
+    car.vl *= 0.3;
     if (impact > 140 && t - lastImpact > 0.5) { lastImpact = t; crash(impact, impactWhat); }
   }
   car.wh = wheelPts(car.x, car.z, car.yaw).map(([wx, wz]) => groundH(wx, wz));
-  car.spin += (car.v / R_TIRE) * dt;
+  car.spin += (car.wheelV / R_TIRE) * dt;
+  verticalStep(dt, (car.wh[0] + car.wh[1] + car.wh[2] + car.wh[3]) / 4);
+  if (car.py < PH.killY) { fellOff(); return; }
   // 물건 밀기
   for (const p of props) {
     for (const lx of CAR_CIRCLES) {
@@ -501,11 +566,12 @@ function physicsStep(dt) {
       if (pen <= 0 || d < 1e-6) continue;
       const nx = dx / d, nz = dz / d;
       p.x += nx * pen; p.z += nz * pen;
-      const cvx = car.v * c, cvz = -car.v * s, cn = cvx * nx + cvz * nz, pn = p.vx * nx + p.vz * nz;
+      const cn = wvx * nx + wvz * nz, pn = p.vx * nx + p.vz * nz;
       if (cn > pn) {
         const j = ((1 + p.rest) * (cn - pn)) / (1 / CAR_MASS + 1 / p.m);
         p.vx += (j / p.m) * nx; p.vz += (j / p.m) * nz; p.spin += (rnd() - 0.5) * 6;
         car.v -= (j / CAR_MASS) * (nx * c - nz * s);
+        if (p.onCar) p.onCar(cn - pn);
         if (p.crash && cn - pn > 220 && t - lastImpact > 0.5) { lastImpact = t; crash(cn - pn, p.crash); }
       }
     }
@@ -590,7 +656,7 @@ function checkGate(prevX, prevZ) {
   }
 }
 function lastGateIndex() { return (state.cp - 1 + CP_N) % CP_N; }
-function resetCar() {
+function resetCar(quiet) {
   // 기록 주행: 마지막으로 지난 체크포인트로. 자유 주행: 가장 가까운 테이프 경로 위로
   let p, t;
   if (state.mode === 'collect') {
@@ -604,7 +670,7 @@ function resetCar() {
   placeCar(p.x, p.z, Math.atan2(-t.z, t.x));
   state.routeIdx = 0;
   nearestRoute(car.x, car.z);
-  toast('차를 경로 위로 되돌렸어요');
+  if (quiet !== true) toast('차를 경로 위로 되돌렸어요');
 }
 const fmt = s => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
@@ -953,7 +1019,7 @@ function toggleRec() {
   beep(state.rec ? [880, 1320] : [660, 440], 0.09);
 }
 function estop() {
-  state.drive = 'user'; state.rec = false; state.constant = false; car.v *= 0.2;
+  state.drive = 'user'; state.rec = false; state.constant = false; car.v *= 0.2; car.vl *= 0.2;
   toast('비상 정지: 수동 모드, 녹화와 일정 속도 꺼짐', 'warn');
   beep([300, 300], 0.07, 'square', 0.08);
 }
@@ -1077,15 +1143,22 @@ function syncVisuals(dt) {
   const [fl, fr, rl, rr] = car.wh;
   const ty = (fl + fr + rl + rr) / 4, tp = Math.atan2((fl + fr) / 2 - (rl + rr) / 2, 190), tr = Math.atan2((fl + rl) / 2 - (fr + rr) / 2, 88);
   const k = 1 - Math.exp(-dt * 16);
-  car.y = lerp(car.y, ty, k); car.pitch = lerp(car.pitch, tp, k); car.roll = lerp(car.roll, tr, k);
+  if (car.air) {
+    car.y = car.py;
+    car.pitch = lerp(car.pitch, clamp(Math.atan2(car.vy, Math.max(300, Math.abs(car.v))) * 0.6, -0.5, 0.4), 1 - Math.exp(-dt * 5));
+    car.roll = lerp(car.roll, 0, 1 - Math.exp(-dt * 2));
+  } else { car.y = lerp(car.y, ty, k); car.pitch = lerp(car.pitch, tp, k); car.roll = lerp(car.roll, tr, k); }
   const shake = Math.abs(car.v) > 20 ? Math.sin(state.time * 70) * 0.25 : 0;
   carBody.position.y = car.y + shake;
   carBody.rotation.set(car.roll, 0, car.pitch);
   applySteer(car.delta);
   for (const w of rig.wheels) w.rotation.z = -car.spin;
   rig.fan.rotation.y += dt * 40;
-  carShadow.position.set(car.x, groundH(car.x, car.z) + 0.8, car.z);
+  const gNow = groundH(car.x, car.z), lift = Math.max(0, car.y - gNow);
+  carShadow.position.set(car.x, gNow + 0.8, car.z);
   carShadow.rotation.z = car.yaw;
+  carShadow.material.opacity = 0.55 / (1 + lift / 220);
+  carShadow.scale.setScalar(1 + lift / 900);
   for (const p of props) {
     p.mesh.position.set(p.x, groundH(p.x, p.z) + p.yoff, p.z);
     if (p.kind === 'ball') {
@@ -1228,7 +1301,7 @@ function sim(sec, steer = 0, thr = 0) {
     const off = nearestRoute(car.x, car.z);
     state.offTrack = state.mode === 'collect' && off > OFF_TRACK;
   }
-  return { x: Math.round(car.x), z: Math.round(car.z), y: +car.y.toFixed(1), v: Math.round(car.v), lap: state.lap, cp: state.cp, crashes: state.crashes, off: state.offTrack };
+  return { x: Math.round(car.x), z: Math.round(car.z), y: +car.py.toFixed(1), v: Math.round(car.v), vl: Math.round(car.vl), air: car.air, lap: state.lap, cp: state.cp, crashes: state.crashes, fell: state.fell, off: state.offTrack };
 }
 // 브라우저 콘솔과 game/tests 에서 쓰는 시험용 손잡이
 window.__game = {
