@@ -312,7 +312,8 @@ function terrainMesh(mat, uvMm = 1000, colorFn = null) {
   geo.computeVertexNormals();
   const m = new T.Mesh(geo, mat);
   m.receiveShadow = true;
-  m.userData.keep = true;
+  m.userData.keep = true;      // 재질별로 합칠 때 빼놓는다 (꼭짓점 색 유지)
+  m.userData.terrain = true;
   statics.add(m);
   return m;
 }

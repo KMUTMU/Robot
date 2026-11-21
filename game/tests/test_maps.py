@@ -36,6 +36,24 @@ def test_switch_no_leftovers(game):
     assert game.logs == [], game.logs
 
 
+def test_every_map_reloads_without_leftovers(game):
+    """맵을 이리저리 바꿔도(왕복 포함) 이전 맵의 메시·충돌체·소품이 남거나 쌓이지 않고 오류도 없음."""
+    ids = game.js('() => __game.maps()')
+    assert len(ids) >= 4, ids
+    first = {}
+    for rnd in range(2):
+        for i in ids:
+            game.js('(id) => __game.loadMap(id)', i)
+            gamelib.frames(game)
+            c = game.js('() => __game.counts()')
+            assert game.js('() => __game.world().id') == i
+            if rnd == 0:
+                first[i] = c
+            else:
+                assert c == first[i], (i, first[i], c)
+    assert game.logs == [], game.logs
+
+
 def test_title_resets_state(game):
     """녹화·AI 모드로 달리다 시작 화면으로 나가서 다시 시작하면 처음 상태."""
     game.js("""() => { const g = __game; g.loadMap('house'); g.start('collect'); g.state.rec = true; g.sim(3, 0, 1); g.state.drive = 'local'; g.sim(2); }""")
@@ -201,3 +219,99 @@ def test_prop_falls_off_desk(game):
     assert all(isinstance(r[k], (int, float)) and r[k] == r[k] for k in ('x', 'z', 'py', 'vz', 'vy')), r
     assert r['z'] > 5000 and abs(r['py'] - r['floor']) < 1 and r['floor'] < -4000, r
     assert abs(r['vz']) < 5 and r['vy'] == 0, r
+
+
+# ---------------------------------------------------------------- 물리: 오르막
+def test_slope_slows_the_car_without_rendering(game):
+    """오르막에서 느려지는 것은 물리 계산이 직접 해야 함 (그리기 쪽 값에 기대면 시험·실제 게임이 서로 달라짐)."""
+    r = game.js('''() => {
+      const g = __game; g.loadMap('desk'); g.start('free'); g.state.maxThr = 1;
+      g.placeCar(2300, 4150, 0);                       // 자 다리(x 3700~4000, 오르막 8.5°)를 향해 동쪽으로
+      let vIn = 0, vMin = 9999;
+      for (let i = 0; i < 300; i++) { g.sim(1 / 120, 0, 1); const x = g.car.x; if (x < 3600) vIn = g.car.v; if (x > 3700 && x < 4150) vMin = Math.min(vMin, g.car.v); }
+      return { vIn, vMin, x: g.car.x, crashes: g.state.crashes };
+    }''')
+    assert r['vIn'] > 1500 and r['crashes'] == 0, r
+    assert r['vMin'] < 0.93 * r['vIn'], r
+
+
+# ---------------------------------------------------------------- 맵: 달 기지
+# 경로 위 점프대: x 6200~7700 (동쪽으로 오르막, 끝 높이 300), z 8200~8800. 도움닫기는 서쪽 x 3600부터
+MOON_JUMP = '''() => {
+  const g = __game; g.loadMap('moon'); g.start('free'); g.state.maxThr = 1;
+  const h = g.world().hooks || {}, old = h.onLand, lands = [];
+  h.onLand = (sec, dist) => { lands.push([sec, dist]); if (old) old(sec, dist); };
+  g.placeCar(3600, 8500, 0);
+  let vLip = 0, maxY = 0;
+  for (let i = 0; i < 5 * 120; i++) { g.sim(1 / 120, 0, 1); if (g.car.x < 7600) vLip = g.car.v; maxY = Math.max(maxY, g.car.py); }
+  h.onLand = old;
+  return { id: g.world().id, grav: g.PH().g, lands, vLip, maxY, x: g.car.x, v: g.car.v, air: g.car.air, crashes: g.state.crashes, fell: g.state.fell, hud: h.hud ? h.hud() : null };
+}'''
+
+
+def test_moon_jump(game):
+    """달(중력 1/6): 점프대를 전속으로 넘으면 0.5초 넘게 떠 있고, 착지한 뒤 그대로 달림."""
+    r = game.js(MOON_JUMP)
+    assert r['id'] == 'moon' and r['grav'] == 1620, r
+    assert r['vLip'] > 1350, r                                     # 중력이 약하니 오르막에서도 거의 안 느려짐
+    assert r['lands'] and r['lands'][0][0] >= 0.5 and r['lands'][0][1] >= 1000, r
+    assert r['maxY'] > 300, r
+    assert r['air'] is False and r['v'] > 1200 and r['x'] > 9500, r
+    assert r['crashes'] == 0 and r['fell'] == 0, r
+    assert r['hud'][0] == '최장 점프' and 'm' in r['hud'][1], r
+
+
+def test_moon_lap(game):
+    r = gamelib.ai_lap(game, 70, map_id='moon')
+    assert game.js('() => __game.world().id') == 'moon'
+    assert r['laps'] and r['crashes'] == 0 and r['fell'] == 0, r
+    hud = game.js('() => __game.world().hooks.hud()')
+    assert 'm' in hud[1], hud                                      # AI도 경로 위 점프대를 넘어 기록이 남음
+    assert game.logs == [], game.logs
+
+
+def test_terrain_consistency(game):
+    """달 지형: 그려진 땅(메시)과 물리가 쓰는 높이가 같아야 바퀴가 땅에 묻히거나 뜨지 않음. 임의 200점 비교."""
+    r = game.js('''() => {
+      const g = __game; g.loadMap('moon');
+      const mesh = g.statics.children.find(o => o.userData.terrain);
+      if (!mesh) return { id: g.world().id, mesh: false };
+      const P = mesh.geometry.attributes.position, I = mesh.geometry.index.array, b = g.world().bounds;
+      const meshH = (x, z) => {
+        for (let i = 0; i < I.length; i += 3) {
+          const ax = P.getX(I[i]), az = P.getZ(I[i]), bx = P.getX(I[i + 1]), bz = P.getZ(I[i + 1]), cx = P.getX(I[i + 2]), cz = P.getZ(I[i + 2]);
+          const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+          const u = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d, v = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d, w = 1 - u - v;
+          if (u >= -1e-9 && v >= -1e-9 && w >= -1e-9) return u * P.getY(I[i]) + v * P.getY(I[i + 1]) + w * P.getY(I[i + 2]);
+        }
+        return null;
+      };
+      const onRamp = (x, z) => (x > 6100 && x < 7800 && z > 8100 && z < 8900) || (x > 6800 && x < 8600 && z > 5800 && z < 6600);
+      let s = 12345, worst = 0, miss = 0, n = 0, lo = 1e9, hi = -1e9;
+      const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+      while (n < 200) {
+        const x = b.x0 + rnd() * (b.x1 - b.x0), z = b.z0 + rnd() * (b.z1 - b.z0);
+        if (onRamp(x, z)) continue;
+        n++;
+        const m = meshH(x, z);
+        if (m == null) { miss++; continue; }
+        worst = Math.max(worst, Math.abs(m - g.groundH(x, z))); lo = Math.min(lo, m); hi = Math.max(hi, m);
+      }
+      return { id: g.world().id, mesh: true, worst, miss, lo, hi, tris: I.length / 3 };
+    }''')
+    assert r['id'] == 'moon' and r['mesh'], r
+    assert r['miss'] == 0 and r['worst'] < 3, r
+    assert r['hi'] - r['lo'] > 150, r                              # 크레이터와 둔덕이 있는 진짜 지형
+
+
+def test_chase_camera_snaps_behind_the_car_after_a_teleport(game):
+    """차를 멀리 옮기면(F 되돌리기, 떨어진 뒤 등) 추격 카메라가 맵을 가로질러 날아오지 않고 바로 차 뒤에 있어야 함."""
+    d = game.js('''async () => {
+      const g = __game, raf = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      g.loadMap('moon'); g.start('free'); g.state.camMode = 0;
+      g.placeCar(2000, 8500, 0); await raf();
+      g.placeCar(12000, 2500, 0); await raf();
+      const c = g.camera.position;
+      return Math.hypot(c.x - g.car.x, c.z - g.car.z);
+    }''')
+    assert d < 1500, d

@@ -378,8 +378,8 @@ const PH_DEFAULT = { vmax: 1600, vrev: 1100, dmax: deg(25), g: 9810, aLat: 9810,
 const PH = Object.assign({}, PH_DEFAULT);
 let world = null;   // 지금 열려 있는 맵 정의
 const CAR_CIRCLES = [-112, 0, 112], CAR_R = 60, CAR_MASS = 1.2;
-// v 앞 방향 속도, vl 왼쪽 방향(옆) 속도, py 바퀴 바닥의 실제 높이, vy 수직 속도, air 공중 여부, y·pitch·roll 은 그리기용
-const car = { x: 0, z: 0, yaw: 0, v: 0, vl: 0, delta: 0, wh: [0, 0, 0, 0], y: 0, py: 0, vy: 0, air: false, airT: 0, airX: 0, airZ: 0, landed: false, wheelV: 0, pitch: 0, roll: 0, spin: 0, stuckT: 0 };
+// v 앞 방향 속도, vl 왼쪽 방향(옆) 속도, py 바퀴 바닥의 실제 높이, vy 수직 속도, air 공중 여부, slope 앞뒤 기울기(물리용), y·pitch·roll 은 그리기용
+const car = { x: 0, z: 0, yaw: 0, v: 0, vl: 0, delta: 0, wh: [0, 0, 0, 0], y: 0, py: 0, vy: 0, air: false, airT: 0, airX: 0, airZ: 0, landed: false, wheelV: 0, slope: 0, pitch: 0, roll: 0, spin: 0, stuckT: 0 };
 function wheelPts(x, z, yaw) {
   const c = Math.cos(yaw), s = Math.sin(yaw), out = [];
   for (const [lx, lz] of [[95, -44], [95, 44], [-95, -44], [-95, 44]]) out.push([x + lx * c + lz * s, z - lx * s + lz * c]);
@@ -390,7 +390,8 @@ function placeCar(x, z, yaw) {
   car.wh = wheelPts(x, z, yaw).map(([wx, wz]) => groundH(wx, wz));
   car.y = car.py = car.wh.reduce((a, b) => a + b) / 4;
   car.vy = 0; car.air = false; car.airT = 0; car.landed = false; car.wheelV = 0;
-  car.pitch = 0; car.roll = 0;
+  car.slope = 0; car.pitch = 0; car.roll = 0;
+  chase.init = false;   // 차를 옮겼으면 추격 카메라도 바로 차 뒤로 (맵을 가로질러 날아오지 않게)
 }
 const input = { steer: 0, thr: 0 };
 const state = {
@@ -486,8 +487,10 @@ function physicsStep(dt) {
   // 속도 (공중에서는 바퀴가 헛돌 뿐 차 속도는 그대로)
   let vt = motorTarget(u);
   if (state.stutter) vt *= 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 8));
-  const slope = car.pitch;
-  if (vt !== 0) vt *= clamp(1 - Math.sin(slope) * 2.2 * Math.sign(vt), 0.3, 1.25);
+  // 오르막이면 느려지고 내리막이면 빨라진다. 기울기는 바퀴 높이로 여기서 직접 구한다 (그리기 쪽 값에 기대지 않음). 중력이 약하면 그만큼 덜
+  const tilt = car.air ? 0 : Math.atan2((car.wh[0] + car.wh[1]) / 2 - (car.wh[2] + car.wh[3]) / 2, L_WB);
+  car.slope = lerp(car.slope, tilt, 1 - Math.exp(-dt * 16));
+  if (vt !== 0) vt *= clamp(1 - Math.sin(car.slope) * 2.2 * (PH.g / 9810) * Math.sign(vt), 0.3, 1.25);
   if (!car.air) {
     const same = Math.sign(vt) === Math.sign(car.v) || car.v === 0;
     const acc = Math.min(vt === 0 ? 2400 : same && Math.abs(vt) > Math.abs(car.v) ? 1600 : 2600, PH.aLong);
@@ -1336,7 +1339,7 @@ function sim(sec, steer = 0, thr = 0) {
 window.__game = {
   state, car, props, movers, opt, start: startGame, groundH, colliders, placeCar, resetCar, sim, setView: v => { debugView = v; }, info: () => renderer.info.render, scene, car3d, statics, dyn,
   loadMap, maps: () => MAPS.map(d => d.id), world: () => world, PH: () => PH, tintOn,
-  renderer, rtLo, rtHi, lensMat,
+  renderer, rtLo, rtHi, lensMat, camera,
   camInfo: () => ({ fisheye: true, hfov: (2 * LENS.kTheta * 180) / Math.PI, dfov: (2.5 * LENS.kTheta * 180) / Math.PI }),
   counts: () => ({ colliders: colliders.length, props: props.length, movers: movers.length, statics: statics.children.length, dyn: dyn.children.length, scene: scene.children.length, geometries: renderer.info.memory.geometries }),
   get route() { return RP; }, get START() { return START; },
