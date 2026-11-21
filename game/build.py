@@ -7,7 +7,9 @@
 - three.js 묶음(3d_model/dist/three-bundle.js)이 없으면 3d_model/build.py 를 먼저 실행해요 (Node.js 필요).
 - 결과: 저장소 맨 위의 RC카_주행게임.html (한 파일, 인터넷 없이도 열림. 글꼴만 인터넷에서 받음)
         game/dist/index.html + three-bundle.js (claude.ai 아티팩트 게시용)
-- 게임 규칙·집 배치·물리는 src/game.js, 화면 꾸밈은 src/template.html
+- 소스: src/core.js(렌더러·공용 도우미) → src/maps/*.js(맵 하나에 파일 하나) → src/main.js(차·물리·화면)를
+  이 순서로 이어 붙여요. 맵을 고치거나 빼려면 src/maps/ 의 파일과 아래 MAP_ORDER 를 고치면 돼요.
+- 화면 꾸밈은 src/template.html
 """
 import pathlib, shutil, subprocess, sys
 
@@ -29,9 +31,12 @@ car = ('function buildCar() {\n' + app[a:b] +
        f'  for (const id of {ids!r}) {{ const g = new T.Group(); g.name = id; B[id](g); car.add(g); }}\n'
        '  return { car, rig, RX, FX, WY };\n}\n')
 
-game = (here / 'src' / 'game.js').read_text(encoding='utf-8')
+MAP_ORDER = ['house', 'living', 'desk', 'moon', 'bowling', 'ice']
+src = here / 'src'
+parts = [src / 'core.js'] + [src / 'maps' / f'{m}.js' for m in MAP_ORDER if (src / 'maps' / f'{m}.js').exists()] + [src / 'main.js']
+game = "(() => {\n'use strict';\n" + '\n'.join(p.read_text(encoding='utf-8') for p in parts) + '\n})();\n'
 if '/*CAR*/' not in game:
-    raise SystemExit('src/game.js 에 /*CAR*/ 자리가 없어요')
+    raise SystemExit('src/core.js 에 /*CAR*/ 자리가 없어요')
 game = game.replace('/*CAR*/', car)
 tpl = (here / 'src' / 'template.html').read_text(encoding='utf-8')
 page = tpl.replace('/*GAME*/', game.replace('</script', '<\\/script'))

@@ -5561,6 +5561,66 @@ function plant(x, z, s = 1, pot = mPot) {
   addCircle(x, z, 185 * s);
 }
 
+/* ================= 정적 메시 합치기 ================= */
+// 같은 설정의 재질은 하나로 보고 묶는다 (부품마다 재질을 새로 만들어 그리기 호출이 많아지는 것 방지)
+const matKeys = new Map();
+function matKey(m, quant) {
+  // quant: 차처럼 작은 물체는 눈에 안 띄는 색·거칠기 차이를 무시하고 묶는다
+  const c = x => {
+    if (!x || !x.isColor) return '';
+    if (!quant) return x.getHexString();
+    const h = x.getHex();
+    return [16, 8, 0].map(sh => Math.round(((h >> sh) & 255) / 20)).join(',');
+  };
+  const q = (v, st) => (quant && typeof v === 'number' ? Math.round(v / st) : v);
+  const tx = x => (x ? x.uuid : '');
+  return [m.type, c(m.color), c(m.emissive), m.emissiveIntensity, q(m.roughness, 0.15), q(m.metalness, 0.5), tx(m.map), tx(m.normalMap), tx(m.roughnessMap), tx(m.alphaMap),
+    m.transparent, m.opacity, m.side, m.depthWrite, m.depthTest, m.flatShading, m.vertexColors, m.envMapIntensity, m.clearcoat, m.clearcoatRoughness, m.sheen,
+    m.toneMapped, m.alphaTest, m.polygonOffset, m.polygonOffsetFactor, m.wireframe, m.blending].join('|');
+}
+function sharedMat(m, quant) {
+  const k = (quant ? 'q' : '') + matKey(m, quant);
+  if (!matKeys.has(k)) matKeys.set(k, m);
+  return matKeys.get(k);
+}
+function mergeInto(root, isDyn, quant = false) {
+  root.updateMatrixWorld(true);
+  const inv = new T.Matrix4().copy(root.matrixWorld).invert();
+  const buckets = new Map(), victims = [];
+  const walk = o => {
+    for (const ch of o.children) {
+      if (isDyn && isDyn(ch)) continue;
+      if (ch.isMesh && !Array.isArray(ch.material) && !ch.userData.keep) {
+        const mat = sharedMat(ch.material, quant);
+        const key = mat.uuid + (ch.castShadow ? 'c' : 'n') + (ch.renderOrder || 0);
+        if (!buckets.has(key)) buckets.set(key, { mat, cast: ch.castShadow, order: ch.renderOrder || 0, geos: [] });
+        let g = ch.geometry.clone();
+        g.applyMatrix4(new T.Matrix4().multiplyMatrices(inv, ch.matrixWorld));
+        if (g.index) g = g.toNonIndexed();
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+        if (!g.attributes.normal) g.computeVertexNormals();
+        if (!g.attributes.uv) g.setAttribute('uv', new T.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+        g.morphAttributes = {};
+        buckets.get(key).geos.push(g);
+        victims.push(ch);
+      }
+      walk(ch);
+    }
+  };
+  walk(root);
+  for (const v of victims) v.parent.remove(v);
+  for (const b of buckets.values()) {
+    const merged = X.BufferGeometryUtils.mergeGeometries(b.geos, false);
+    if (!merged) continue;
+    const m = new T.Mesh(merged, b.mat);
+    m.castShadow = b.cast;
+    m.receiveShadow = true;
+    m.renderOrder = b.order;
+    root.add(m);
+  }
+}
+
+
 function buildHouse() {
   // 바닥: 거실·주방·복도 (현관 자리는 비움). 단위 mm, 거실 3.8×3.6m, 주방·식탁 3.4×3.6m, 복도 폭 1.08m
   const fl = new T.Shape([[0, 0], [7200, 0], [7200, -3720], [6400, -3720], [6400, -4800], [0, -4800]].map(([a, b]) => new T.Vector2(a, b)));
@@ -5902,64 +5962,6 @@ function buildHouse() {
   }
 }
 
-/* ================= 정적 메시 합치기 ================= */
-// 같은 설정의 재질은 하나로 보고 묶는다 (부품마다 재질을 새로 만들어 그리기 호출이 많아지는 것 방지)
-const matKeys = new Map();
-function matKey(m, quant) {
-  // quant: 차처럼 작은 물체는 눈에 안 띄는 색·거칠기 차이를 무시하고 묶는다
-  const c = x => {
-    if (!x || !x.isColor) return '';
-    if (!quant) return x.getHexString();
-    const h = x.getHex();
-    return [16, 8, 0].map(sh => Math.round(((h >> sh) & 255) / 20)).join(',');
-  };
-  const q = (v, st) => (quant && typeof v === 'number' ? Math.round(v / st) : v);
-  const tx = x => (x ? x.uuid : '');
-  return [m.type, c(m.color), c(m.emissive), m.emissiveIntensity, q(m.roughness, 0.15), q(m.metalness, 0.5), tx(m.map), tx(m.normalMap), tx(m.roughnessMap), tx(m.alphaMap),
-    m.transparent, m.opacity, m.side, m.depthWrite, m.depthTest, m.flatShading, m.vertexColors, m.envMapIntensity, m.clearcoat, m.clearcoatRoughness, m.sheen,
-    m.toneMapped, m.alphaTest, m.polygonOffset, m.polygonOffsetFactor, m.wireframe, m.blending].join('|');
-}
-function sharedMat(m, quant) {
-  const k = (quant ? 'q' : '') + matKey(m, quant);
-  if (!matKeys.has(k)) matKeys.set(k, m);
-  return matKeys.get(k);
-}
-function mergeInto(root, isDyn, quant = false) {
-  root.updateMatrixWorld(true);
-  const inv = new T.Matrix4().copy(root.matrixWorld).invert();
-  const buckets = new Map(), victims = [];
-  const walk = o => {
-    for (const ch of o.children) {
-      if (isDyn && isDyn(ch)) continue;
-      if (ch.isMesh && !Array.isArray(ch.material) && !ch.userData.keep) {
-        const mat = sharedMat(ch.material, quant);
-        const key = mat.uuid + (ch.castShadow ? 'c' : 'n') + (ch.renderOrder || 0);
-        if (!buckets.has(key)) buckets.set(key, { mat, cast: ch.castShadow, order: ch.renderOrder || 0, geos: [] });
-        let g = ch.geometry.clone();
-        g.applyMatrix4(new T.Matrix4().multiplyMatrices(inv, ch.matrixWorld));
-        if (g.index) g = g.toNonIndexed();
-        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
-        if (!g.attributes.normal) g.computeVertexNormals();
-        if (!g.attributes.uv) g.setAttribute('uv', new T.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
-        g.morphAttributes = {};
-        buckets.get(key).geos.push(g);
-        victims.push(ch);
-      }
-      walk(ch);
-    }
-  };
-  walk(root);
-  for (const v of victims) v.parent.remove(v);
-  for (const b of buckets.values()) {
-    const merged = X.BufferGeometryUtils.mergeGeometries(b.geos, false);
-    if (!merged) continue;
-    const m = new T.Mesh(merged, b.mat);
-    m.castShadow = b.cast;
-    m.receiveShadow = true;
-    m.renderOrder = b.order;
-    root.add(m);
-  }
-}
 
 buildHouse();
 mergeInto(statics);
@@ -7113,6 +7115,7 @@ function sim(sec, steer = 0, thr = 0) {
   return { x: Math.round(car.x), z: Math.round(car.z), y: +car.y.toFixed(1), v: Math.round(car.v), lap: state.lap, cp: state.cp, crashes: state.crashes, off: state.offTrack };
 }
 window.__game = { state, car, props, vac, start: startGame, groundH, colliders, placeCar, sim, setView: v => { debugView = v; }, info: () => renderer.info.render, route: RP, START, scene, car3d, statics, cat };
+
 })();
 
 </script>
