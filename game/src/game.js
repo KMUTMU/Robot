@@ -790,15 +790,11 @@ function placeGate(i) {
 /* ================= 내 차 ================= */
 const built = buildCar();
 const car3d = built.car, rig = built.rig;
-rig.planEdges.visible = false;
 car3d.traverse(o => {
   if (!o.isMesh) return;
   for (const m of [].concat(o.material)) {
     if (m.transmission > 0) { m.transmission = 0; m.transparent = true; m.opacity = 0.3; m.depthWrite = false; m.roughness = 0.08; }
   }
-});
-car3d.getObjectByName('powerbank').traverse(o => {
-  if (o.isMesh && o.material.transparent && o.material.opacity > 0.5) { o.material.transparent = false; o.material.opacity = 1; o.material.depthWrite = true; o.castShadow = true; }
 });
 for (const id of ['fpc', 'servocables', 'powerwires', 'i2c']) car3d.getObjectByName(id).traverse(o => { if (o.isMesh) o.castShadow = false; });
 const dyn = new Set([...rig.frontPivots, ...rig.wheels, ...rig.knuckles, rig.tie, ...rig.tieEnds, rig.horn, rig.drag, ...rig.dragEnds, rig.fan]);
