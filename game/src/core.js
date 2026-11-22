@@ -4,6 +4,14 @@ const deg = d => (d * Math.PI) / 180;
 const UP = V(0, 1, 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };                       // 0~1 사이를 부드럽게
+const lcg = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;                  // 씨앗이 같으면 늘 같은 난수 (그림·배치용)
+// 자리마다 정해진 0~1 값과, 그것을 부드럽게 이은 잡음 (지형의 굴곡·얼룩용)
+const hash2 = (i, j) => { const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); };
+function vnoise(x, z) {
+  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
+  return lerp(lerp(hash2(i, j), hash2(i + 1, j), a), lerp(hash2(i, j + 1), hash2(i + 1, j + 1), a), b);
+}
 const $ = s => document.querySelector(s);
 const isTouch = matchMedia('(pointer: coarse)').matches;
 
@@ -172,6 +180,8 @@ const tapeTex = ctex(64, 16, (c, w, h) => {
   c.fillStyle = 'rgba(255,255,255,0.12)'; for (let x = 0; x < w; x += 6) c.fillRect(x, 0, 2, h);
 }, null);
 tapeTex.wrapS = T.RepeatWrapping;
+// 다른 색 테이프 (얼음 위처럼 파란 테이프가 잘 안 보이는 맵용)
+const tapeTexOf = color => TX('tape' + color, () => { const t = ctex(64, 16, (c, w, h) => { c.fillStyle = color; c.fillRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,0.14)'; for (let x = 0; x < w; x += 6) c.fillRect(x, 0, 2, h); }, null); t.wrapS = T.RepeatWrapping; return t; });
 
 /* ================= 재질 ================= */
 const MC = new Map();
@@ -294,7 +304,8 @@ function terrainH(x, z) {
   const h00 = g.d[k], h10 = g.d[k + 1], h01 = g.d[k + g.nx], h11 = g.d[k + g.nx + 1];
   return u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
 }
-function terrainMesh(mat, uvMm = 1000, colorFn = null) {
+// keep(칸 번호 k)가 false인 칸은 그리지 않는다 (예: 얼음판이 덮는 호수 안쪽)
+function terrainMesh(mat, uvMm = 1000, colorFn = null, keep = null) {
   const g = hgrid, pos = new Float32Array(g.nx * g.nz * 3), uv = new Float32Array(g.nx * g.nz * 2), idx = [];
   const col = colorFn ? new Float32Array(g.nx * g.nz * 3) : null;
   for (let j = 0; j < g.nz; j++) for (let i = 0; i < g.nx; i++) {
@@ -302,7 +313,7 @@ function terrainMesh(mat, uvMm = 1000, colorFn = null) {
     pos[k * 3] = x; pos[k * 3 + 1] = g.d[k]; pos[k * 3 + 2] = z;
     uv[k * 2] = x / uvMm; uv[k * 2 + 1] = z / uvMm;
     if (col) { const c3 = colorFn(x, z, g.d[k]); col[k * 3] = c3[0]; col[k * 3 + 1] = c3[1]; col[k * 3 + 2] = c3[2]; }
-    if (i < g.nx - 1 && j < g.nz - 1) idx.push(k, k + g.nx, k + 1, k + 1, k + g.nx, k + g.nx + 1);
+    if (i < g.nx - 1 && j < g.nz - 1 && (!keep || keep(k))) idx.push(k, k + g.nx, k + 1, k + 1, k + g.nx, k + g.nx + 1);
   }
   const geo = new T.BufferGeometry();
   geo.setAttribute('position', new T.BufferAttribute(pos, 3));
@@ -316,6 +327,22 @@ function terrainMesh(mat, uvMm = 1000, colorFn = null) {
   m.userData.terrain = true;
   statics.add(m);
   return m;
+}
+// 별이 박힌 밤하늘 반구 (합쳐지지 않게 dyn에 넣는다). 중심 (cx, cz), 반지름 R
+function starField(cx, cz, R = 20500, n = 1100, seed = 4242) {
+  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), r = lcg(seed);
+  for (let i = 0; i < n; i++) {
+    const a = r() * Math.PI * 2, y = 0.02 + r() * 0.96, q = Math.sqrt(1 - y * y), b = 0.3 + 0.7 * r() ** 2.4, t = r();
+    pos.set([cx + Math.cos(a) * q * R, y * R, cz + Math.sin(a) * q * R], i * 3);
+    col.set([b * (t < 0.2 ? 1 : 0.92), b * 0.95, b * (t > 0.8 ? 1 : 0.9)], i * 3);
+  }
+  const sg = new T.BufferGeometry();
+  sg.setAttribute('position', new T.BufferAttribute(pos, 3));
+  sg.setAttribute('color', new T.BufferAttribute(col, 3));
+  const stars = new T.Points(sg, M('stars', () => new T.PointsMaterial({ size: 2.4, sizeAttenuation: false, vertexColors: true, toneMapped: false, fog: false })));
+  stars.frustumCulled = false;
+  dyn.add(stars);
+  return stars;
 }
 function plateH(f, x, z) {
   if (x <= f.x0 || x >= f.x1 || z <= f.z0 || z >= f.z1) return 0;

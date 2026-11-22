@@ -10,13 +10,6 @@ const RAMPS = [[6200, 7700, 8200, 8800, 300], [6900, 8500, 5900, 6500, 440]];
 // 평평하게 고른 자리 [x, z, 반지름]: 건물 밑, 점프대 밑, 착지하는 곳
 const PADS = [[7000, 2100, 900], [11700, 1800, 1500], [3150, 1700, 1500], [6950, 8500, 1300], [8900, 8500, 1400], [7700, 6200, 1200], [6300, 4950, 500]];
 
-const lcg = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-const hash2 = (i, j) => { const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); };
-function vnoise(x, z) {
-  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
-  return lerp(lerp(hash2(i, j), hash2(i + 1, j), a), lerp(hash2(i, j + 1), hash2(i + 1, j + 1), a), b);
-}
-const sstep = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 // 평지 끝에서 바깥으로 나간 거리 (안쪽이면 0)
 const outside = (x, z) => Math.hypot(Math.max(EDGE - x, 0, x - (MW - EDGE)), Math.max(EDGE - z, 0, z - (MD - EDGE)));
 function moonH(x, z) {
@@ -303,22 +296,12 @@ function sign(x, z, ang, lines) {
 
 /* ---------- 하늘과 먼 산 ---------- */
 function sky() {
-  const N = 1100, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), r = lcg(4242), R = 20500;
-  for (let i = 0; i < N; i++) {
-    const a = r() * Math.PI * 2, y = 0.02 + r() * 0.96, q = Math.sqrt(1 - y * y), b = 0.3 + 0.7 * r() ** 2.4, t = r();
-    pos.set([MW / 2 + Math.cos(a) * q * R, y * R, MD / 2 + Math.sin(a) * q * R], i * 3);
-    col.set([b * (t < 0.2 ? 1 : 0.92), b * 0.95, b * (t > 0.8 ? 1 : 0.9)], i * 3);
-  }
-  const sg = new T.BufferGeometry();
-  sg.setAttribute('position', new T.BufferAttribute(pos, 3));
-  sg.setAttribute('color', new T.BufferAttribute(col, 3));
-  const stars = new T.Points(sg, M('mnStars', () => new T.PointsMaterial({ size: 2.4, sizeAttenuation: false, vertexColors: true, toneMapped: false, fog: false })));
-  stars.frustumCulled = false;
-  const earth = new T.Mesh(new T.SphereGeometry(1500, 48, 32), M('mnEarthM', () => new T.MeshStandardMaterial({ map: earthTex(), roughness: 0.9, emissive: 0x0a1a3a, emissiveIntensity: 0.6, envMapIntensity: 0 })));
+  starField(MW / 2, MD / 2);
+  const earth = new T.Mesh(new T.SphereGeometry(1500, 48, 32), M('mnEarthM', () => new T.MeshStandardMaterial({ map: earthTex(), roughness: 0.9, emissive: 0x0a1a3a, emissiveIntensity: 0.6, envMap: scene.environment, envMapIntensity: 0 })));
   earth.position.set(8800, 3300, -12500); earth.rotation.set(0.35, 1.2, 0.2);
   const halo = new T.Mesh(new T.SphereGeometry(1590, 40, 24), M('mnHalo', () => new T.MeshBasicMaterial({ color: 0x5fa8ff, transparent: true, opacity: 0.16, side: T.BackSide, depthWrite: false, toneMapped: false })));
   halo.position.copy(earth.position);
-  dyn.add(stars, halo, earth);
+  dyn.add(halo, earth);
   return earth;
 }
 function farGround(mat) {
@@ -350,75 +333,8 @@ function farGround(mat) {
   statics.add(m);
 }
 
-/* ---------- 흙먼지와 바퀴 자국 (보이기만 하고 물리에는 영향 없음) ---------- */
-const DUST_N = 240, TRK_N = 1500;
-let fx = null;
-function makeFx() {
-  const dustMesh = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), std('mnDust', { color: 0xc4c2bd, roughness: 1 }), DUST_N);
-  dustMesh.frustumCulled = false; dustMesh.castShadow = false;
-  const zero = new T.Matrix4().makeScale(0, 0, 0);
-  for (let i = 0; i < DUST_N; i++) dustMesh.setMatrixAt(i, zero);
-  const tg = new T.BufferGeometry(), tpos = new Float32Array(TRK_N * 12), tidx = new Uint16Array(TRK_N * 6);
-  for (let q = 0; q < TRK_N; q++) tidx.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4 + 1, q * 4 + 3, q * 4 + 2], q * 6);
-  tg.setAttribute('position', new T.BufferAttribute(tpos, 3));
-  tg.setIndex(new T.BufferAttribute(tidx, 1));
-  const trackMesh = new T.Mesh(tg, M('mnTrack', () => new T.MeshBasicMaterial({ color: 0x0c0c0e, transparent: true, opacity: 0.32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: T.DoubleSide })));
-  trackMesh.frustumCulled = false; trackMesh.renderOrder = 2;
-  dyn.add(dustMesh, trackMesh);
-  fx = { dustMesh, zero, p: new Float32Array(DUST_N * 3), v: new Float32Array(DUST_N * 3), life: new Float32Array(DUST_N), size: new Float32Array(DUST_N), next: 0, acc: 0, mat: new T.Matrix4(), tg, tpos, tq: 0, last: null, t: 0 };
-}
-function puff(x, y, z, vx, vy, vz, size) {
-  const i = fx.next++ % DUST_N;
-  fx.p.set([x, y, z], i * 3); fx.v.set([vx, vy, vz], i * 3); fx.life[i] = 1; fx.size[i] = size;
-}
-function clearFx() {
-  if (!fx) return;
-  fx.life.fill(0); fx.tpos.fill(0); fx.tq = 0; fx.last = null; fx.acc = 0;
-  for (let i = 0; i < DUST_N; i++) fx.dustMesh.setMatrixAt(i, fx.zero);
-  fx.dustMesh.instanceMatrix.needsUpdate = true; fx.tg.attributes.position.needsUpdate = true;
-}
-function fxStep(dt) {
-  const live = state.playing && !state.paused, c = Math.cos(car.yaw), s = Math.sin(car.yaw);
-  if (live && !car.air) {
-    const w = wheelPts(car.x, car.z, car.yaw), sp = Math.abs(car.wheelV);
-    // 흙먼지: 빠를수록, 미끄러질수록 많이. 뒷바퀴에서 뒤·위로 튄다 (중력이 약해서 높이 오래 난다)
-    fx.acc += dt * (clamp(sp / 1600, 0, 1) * 70 + (Math.abs(car.vl) > 60 ? 90 : 0));
-    while (fx.acc >= 1) {
-      fx.acc -= 1;
-      const [wx, wz] = w[2 + (fx.next & 1)], back = -(0.15 + Math.random() * 0.3) * car.v, side = (Math.random() - 0.5) * 190 - car.vl * 0.5;
-      puff(wx, groundH(wx, wz) + 6, wz, back * c + side * s, 160 + Math.random() * 0.3 * sp, -back * s + side * c, 4.5 + Math.random() * 7);
-    }
-    // 바퀴 자국: 뒷바퀴 둘이 지나간 자리에 어두운 띠. 떠 있는 동안은 끊긴다
-    const cur = [2, 3].map(i => [[w[i][0] - s * 13, w[i][1] - c * 13], [w[i][0] + s * 13, w[i][1] + c * 13]]);
-    if (!fx.last) fx.last = cur;
-    else {
-      const d = Math.hypot(cur[0][0][0] - fx.last[0][0][0], cur[0][0][1] - fx.last[0][0][1]);
-      if (d >= 220) fx.last = cur;
-      else if (d >= 30) {
-        for (let k = 0; k < 2; k++) {
-          const o = (fx.tq++ % TRK_N) * 12;
-          [fx.last[k][0], fx.last[k][1], cur[k][0], cur[k][1]].forEach(([x, z], j) => { fx.tpos[o + j * 3] = x; fx.tpos[o + j * 3 + 1] = groundH(x, z) + 1.6; fx.tpos[o + j * 3 + 2] = z; });
-        }
-        fx.tg.attributes.position.needsUpdate = true;
-        fx.last = cur;
-      }
-    }
-  } else fx.last = null;
-  for (let i = 0; i < DUST_N; i++) {
-    if (fx.life[i] <= 0) continue;
-    const o = i * 3;
-    fx.v[o + 1] -= PH.g * dt;
-    fx.p[o] += fx.v[o] * dt; fx.p[o + 1] += fx.v[o + 1] * dt; fx.p[o + 2] += fx.v[o + 2] * dt;
-    fx.life[i] -= dt * 0.9;
-    if (fx.life[i] <= 0 || (fx.v[o + 1] < 0 && fx.p[o + 1] < groundH(fx.p[o], fx.p[o + 2]))) { fx.life[i] = 0; fx.dustMesh.setMatrixAt(i, fx.zero); continue; }
-    const k = fx.size[i] * Math.min(1, fx.life[i] * 2.2);
-    fx.dustMesh.setMatrixAt(i, fx.mat.makeScale(k, k * 0.7, k).setPosition(fx.p[o], fx.p[o + 1], fx.p[o + 2]));
-  }
-  fx.dustMesh.instanceMatrix.needsUpdate = true;
-}
-
 /* ---------- 짓기 ---------- */
-let anim = null, best = null;
+let anim = null, best = null, fx = null, clock = 0;
 function buildMoon() {
   setTerrain(moonH, -GRID_OUT, -GRID_OUT, MW + GRID_OUT, MD + GRID_OUT, 100);
   const rego = M('mnRegoM', () => new T.MeshStandardMaterial({ map: regoTex(), vertexColors: true, roughness: 1, metalness: 0 }));
@@ -449,7 +365,8 @@ function buildMoon() {
   }
 
   const earth = sky();
-  makeFx();
+  // 흙먼지(빠를수록, 미끄러질수록 많이. 중력이 약해 높이 오래 난다)와 바퀴 자국(떠 있는 동안은 끊긴다)
+  fx = makeWheelFx({ bits: 0xc4c2bd, track: 0x0c0c0e, trackOp: 0.32, up: 160, sideK: -0.5, rate: sp => clamp(sp / 1600, 0, 1) * 70 + (Math.abs(car.vl) > 60 ? 90 : 0), marking: () => true });
   anim = { beacon, astro, earth };
   best = null;
 }
@@ -476,22 +393,22 @@ MAPS.push({
   build: buildMoon,
   hooks: {
     sync(dt) {
-      fx.t += dt;
-      const ph = fx.t % 1.9, u = ph / 0.6;
+      clock += dt;
+      const ph = clock % 1.9, u = ph / 0.6;
       anim.astro.g.position.y = anim.astro.y0 + (u < 1 ? 85 * 4 * u * (1 - u) : 0);       // 느린 제자리 뛰기
-      anim.astro.arm.rotation.x = -0.55 + 0.35 * Math.sin(fx.t * 5);
-      anim.beacon.visible = fx.t % 1.4 < 0.25;
+      anim.astro.arm.rotation.x = -0.55 + 0.35 * Math.sin(clock * 5);
+      anim.beacon.material.color.setHex(clock % 1.4 < 0.25 ? 0xff3b30 : 0x3a0c0a);       // 깜박이는 등 (꺼졌을 때도 어둡게 보임)
       anim.earth.rotation.y += dt * 0.01;
-      fxStep(dt);
+      fx.step(dt);
     },
     onLand(sec, dist) {
-      if (sec > 0.25) for (let i = 0; i < 34; i++) { const a = Math.random() * 6.283, v = 160 + Math.random() * 380; puff(car.x + Math.cos(a) * 90, car.py + 8, car.z + Math.sin(a) * 90, Math.cos(a) * v, 120 + Math.random() * 330, Math.sin(a) * v, 8 + Math.random() * 10); }
+      if (sec > 0.25) for (let i = 0; i < 34; i++) { const a = Math.random() * 6.283, v = 160 + Math.random() * 380; fx.puff(car.x + Math.cos(a) * 90, car.py + 8, car.z + Math.sin(a) * 90, Math.cos(a) * v, 120 + Math.random() * 330, Math.sin(a) * v, 8 + Math.random() * 10); }
       if (sec < 0.3 || (best && dist <= best.d)) return;
       best = { d: dist, t: sec };
       if (state.playing) toast(`점프 ${(dist / 1000).toFixed(2)} m, ${sec.toFixed(1)}초 동안 떠 있었어요! 새 기록`, 'good');
     },
     hud: () => ['최장 점프', best ? `${(best.d / 1000).toFixed(2)} m · ${best.t.toFixed(1)}초` : '아직 없음'],
-    reset() { best = null; clearFx(); },
+    reset() { best = null; fx.clear(); },
   },
 });
 }

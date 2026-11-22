@@ -6,8 +6,6 @@
 const BW = 9000, BD = 6000, FOUL = 2600, DECK = 8760, BACK = 8880, HEAD = 7908, ROW = 264, GAP = 305, LANE_HW = 535;
 const ZC = [1460, 3000, 4540], Z0 = ZC[0] - 770, Z1 = ZC[2] + 770;   // 레인 가운데 z, 레인 묶음의 북쪽·남쪽 끝
 const GUT = ZC.flatMap(zc => [zc - 652.5, zc + 652.5]);              // 거터(폭 235, 깊이 45) 가운데 z
-const lcg = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-const sstep = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 const mat = (name, color, rough = 0.7, o = {}) => std('bw' + name, { color, roughness: rough, ...o });
 // 바닥 높이: 거터는 둥근 홈. 파울 라인에서 300mm에 걸쳐 깊어진다
 function bowlLevel(x, z) {

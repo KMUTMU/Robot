@@ -24,33 +24,25 @@ def test_house_regression(game):
     assert game.logs == [], game.logs
 
 
-def test_switch_no_leftovers(game):
-    """같은 맵을 여러 번 불러도 이전 것이 남지 않음."""
-    counts = []
-    for _ in range(3):
-        game.js("() => __game.loadMap('house')")
-        gamelib.frames(game)
-        counts.append(game.js('() => __game.counts()'))
-    assert counts[0] == counts[1] == counts[2], counts
-    assert counts[0]['colliders'] > 50 and counts[0]['props'] == 18 and counts[0]['movers'] == 2, counts[0]
-    assert game.logs == [], game.logs
-
-
 def test_every_map_reloads_without_leftovers(game):
     """맵을 이리저리 바꿔도(왕복 포함) 이전 맵의 메시·충돌체·소품이 남거나 쌓이지 않고 오류도 없음."""
     ids = game.js('() => __game.maps()')
     assert len(ids) >= 4, ids
     first = {}
-    for rnd in range(2):
+    for rnd in range(3):
         for i in ids:
-            game.js('(id) => __game.loadMap(id)', i)
+            # 위에서 맵 전체가 보이게 해야 모든 메시가 그려져서(등록돼서) 수가 일정하다. 시작 화면 카메라는 계속 돌기 때문
+            game.js("""(id) => { const g = __game; g.loadMap(id); const b = g.world().bounds, cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2; g.setView([[cx, 24000, cz + 1], [cx, 0, cz]]); }""", i)
             gamelib.frames(game)
             c = game.js('() => __game.counts()')
             assert game.js('() => __game.world().id') == i
             if rnd == 0:
                 first[i] = c
             else:
-                assert c == first[i], (i, first[i], c)
+                assert c == first[i], (rnd, i, first[i], c)
+    game.js('() => __game.setView(null)')
+    h = first['house']
+    assert h['colliders'] > 50 and h['props'] == 18 and h['movers'] == 2, h
     assert game.logs == [], game.logs
 
 
@@ -387,3 +379,82 @@ def test_bowling_gutter_is_a_channel_the_car_can_cross(game):
     assert abs(r['h']['lane']) < 0.5 and abs(r['h']['ridge']) < 0.5 and abs(r['h']['lobby']) < 0.5, r
     assert -50 < r['h']['gutter'] < -38, r                          # 거터는 깊이 45mm쯤의 둥근 홈
     assert r['z'] < 640 and abs(r['py']) < 3 and r['crashes'] == 0 and r['fell'] == 0, r
+
+
+# ---------------------------------------------------------------- 맵: 얼음 호수
+# 얼음 구멍(반지름 300): (8900, 3900) (7000, 5600) (10200, 6400). 퍽 (8800, 4850), 골대 입구 x 10600, z 4400~5300. 눈 쌓인 곳 예: (11400, 2700)
+ICE_SLIDE = '''() => {
+  const g = __game; g.loadMap('ice'); g.start('free'); g.state.maxThr = 1;
+  g.placeCar(2700, 2900, 0);
+  g.sim(1, 0, 1); const v1 = g.car.v;                 // 얼음이라 가속이 더딤
+  g.sim(1, 0, 1); const v2 = g.car.v;
+  let vlMax = 0; for (let i = 0; i < 96; i++) { g.sim(1 / 120, -1, 1); vlMax = Math.max(vlMax, Math.abs(g.car.vl)); }
+  g.sim(1.2, 0, 0);
+  const w = g.world();
+  return { id: w.id, v1, v2, vlMax, crashes: g.state.crashes, fell: g.state.fell, hud: w.hooks ? w.hooks.hud() : null, grip: w.gripAt ? [w.gripAt(2700, 2900), w.gripAt(11400, 2700)] : null };
+}'''
+
+
+def test_ice_slides(game):
+    r = game.js(ICE_SLIDE)
+    assert r['id'] == 'ice', r
+    assert 700 < r['v1'] < 1000 and r['v2'] > 1500, r               # 가속 한계 900mm/s²
+    assert r['vlMax'] > 100, r                                       # 급하게 꺾으면 옆으로 미끄러짐
+    assert r['crashes'] == 0 and r['fell'] == 0, r
+    assert r['grip'][0] == 650 and r['grip'][1] > 2000, r            # 눈 쌓인 곳은 덜 미끄러움
+    assert r['hud'][0] == '드리프트' and float(r['hud'][1].split('최장 ')[1].split(' m')[0]) > 0.3, r
+
+
+def test_ice_hole(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('ice'); g.start('free'); g.state.maxThr = 1;
+      g.placeCar(5900, 5600, 0);                                     // 동쪽 1.1m 앞이 구멍 (7000, 5600)
+      let minY = 0; for (let i = 0; i < 360 && !g.state.fell; i++) { g.sim(1 / 120, 0, 1); minY = Math.min(minY, g.car.py); }
+      return { id: g.world().id, fell: g.state.fell, minY, air: g.car.air, py: g.car.py, wavg: g.car.wh.reduce((a, b) => a + b) / 4, hole: g.groundH(7000, 5600), toasts: document.querySelector('#toasts').textContent };
+    }''')
+    assert r['id'] == 'ice' and r['fell'] == 1 and r['minY'] < -150, r   # 200mm 넘게 가라앉으면 되돌림 (그 직전 높이까지 기록됨)
+    assert r['air'] is False and abs(r['py'] - r['wavg']) < 1 and abs(r['py']) < 1, r
+    assert r['hole'] < -300 and '얼음 구멍' in r['toasts'], r
+
+
+def test_penguin_flees(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('ice'); g.start('free'); g.state.maxThr = 1;
+      const pens = g.movers.filter(m => m.kind === 'penguin'), p = pens[0];
+      if (!p) return { id: g.world().id, n: 0 };
+      const x0 = p.x, z0 = p.z;
+      g.placeCar(p.x - 1500, p.z, 0); g.sim(2, 0, 1);
+      return { id: g.world().id, n: pens.length, moved: Math.hypot(p.x - x0, p.z - z0) };
+    }''')
+    assert r['id'] == 'ice' and r['n'] == 5, r
+    assert r['moved'] >= 400, r                                      # 차가 달려오면 2초 안에 40cm 넘게 비킴
+
+
+def test_ice_puck_into_goal_scores(game):
+    r = game.js('''() => {
+      const g = __game; g.loadMap('ice'); g.start('free');
+      const p = g.props.find(q => q.kind === 'puck');
+      if (!p) return { id: g.world().id };
+      p.x = 10000; p.z = 4850; p.vx = 900; p.vz = 0;
+      g.sim(1.5, 0, 0); const hud1 = g.world().hooks.hud()[1];
+      g.sim(3, 0, 0);
+      return { id: g.world().id, hud1, back: Math.hypot(p.x - p.x0, p.z - p.z0) };
+    }''')
+    assert r['id'] == 'ice' and '골 1' in r['hud1'], r
+    assert r['back'] < 5, r                                          # 골이 들어가면 퍽을 제자리에 다시 놓음
+
+
+def test_ice_lap(game):
+    r = gamelib.ai_lap(game, 80, map_id='ice')
+    assert game.js('() => __game.world().id') == 'ice'
+    assert r['laps'] and r['crashes'] == 0 and r['fell'] == 0, r
+    assert game.logs == [], game.logs
+
+
+def test_ice_ai_demo_moves_at_every_speed_setting(game):
+    """맵이 AI 데모를 천천히 달리게 해도(얼음), 시작 화면에서 고른 최대 속도가 낮다고 차가 정지 구간에 걸려 기어가면 안 됨."""
+    r = game.js('''() => { const g = __game, out = {};
+      for (const thr of [0.6, 0.8, 1]) { g.loadMap('ice'); g.start('collect'); g.state.drive = 'local'; g.state.maxThr = thr; const x0 = g.car.x; g.sim(10); out[thr] = g.car.x - x0; }
+      return out; }''')
+    assert r['0.6'] > 2000 and r['0.6'] < r['0.8'] < r['1'], r
+    assert r['1'] < 10 * 1000, r                                     # 그래도 얼음에서는 전속(1.6m/s)보다 느리게

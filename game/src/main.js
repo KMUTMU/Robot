@@ -21,6 +21,7 @@ function setRoute(r) {
     const u = 110 / ROUTE_LEN, p = route.getPointAt(u), t = route.getTangentAt(u);
     START = { x: p.x, z: p.z, yaw: Math.atan2(-t.z, t.x) };
   }
+  mTape.map = r.color ? tapeTexOf(r.color) : tapeTex;   // 맵이 테이프 색을 정할 수 있다
   for (const o of tapeGroup.children) o.geometry.dispose();
   tapeGroup.clear();
   for (const side of [-1, 1]) {
@@ -312,6 +313,76 @@ function makeCat(x, z, a) {
   return addMover(cat);
 }
 
+/* ================= 바퀴가 일으키는 것: 흙먼지·눈가루와 바퀴 자국 ================= */
+// 보이기만 하고 물리에는 영향이 없다. 맵의 build에서 만들고(dyn에 들어감), hooks.sync에서 step(dt), hooks.reset에서 clear().
+// o: bits 알갱이 색, track·trackOp 자국 색과 진하기, up 알갱이가 튀어 오르는 속도, sideK 옆으로 미끄러질 때 튀는 쪽과 세기,
+//    rate(바퀴 속도) 초당 알갱이 수, marking() 지금 자국을 남길지, g 알갱이 중력(없으면 맵 중력)
+function makeWheelFx(o) {
+  const N = 240, TQ = 1500, zero = new T.Matrix4().makeScale(0, 0, 0), mat4 = new T.Matrix4();
+  const bits = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), std('fxBits' + o.bits, { color: o.bits, roughness: 1 }), N);
+  bits.frustumCulled = false; bits.castShadow = false;
+  for (let i = 0; i < N; i++) bits.setMatrixAt(i, zero);
+  const tg = new T.BufferGeometry(), tpos = new Float32Array(TQ * 12), tidx = new Uint16Array(TQ * 6);
+  for (let q = 0; q < TQ; q++) tidx.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4 + 1, q * 4 + 3, q * 4 + 2], q * 6);
+  tg.setAttribute('position', new T.BufferAttribute(tpos, 3));
+  tg.setIndex(new T.BufferAttribute(tidx, 1));
+  const marks = new T.Mesh(tg, M('fxTrack' + o.track + o.trackOp, () => new T.MeshBasicMaterial({ color: o.track, transparent: true, opacity: o.trackOp, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: T.DoubleSide })));
+  marks.frustumCulled = false; marks.renderOrder = 2;
+  dyn.add(bits, marks);
+  const p = new Float32Array(N * 3), v = new Float32Array(N * 3), life = new Float32Array(N), size = new Float32Array(N);
+  let next = 0, acc = 0, tq = 0, last = null;
+  const fx = {
+    puff(x, y, z, vx, vy, vz, sz) { const i = next++ % N; p.set([x, y, z], i * 3); v.set([vx, vy, vz], i * 3); life[i] = 1; size[i] = sz; },
+    clear() {
+      life.fill(0); tpos.fill(0); tq = 0; last = null; acc = 0;
+      for (let i = 0; i < N; i++) bits.setMatrixAt(i, zero);
+      bits.instanceMatrix.needsUpdate = true; tg.attributes.position.needsUpdate = true;
+    },
+    step(dt) {
+      const live = state.playing && !state.paused, c = Math.cos(car.yaw), s = Math.sin(car.yaw);
+      if (live && !car.air) {
+        // 알갱이: 뒷바퀴에서 뒤·위로 튄다
+        const w = wheelPts(car.x, car.z, car.yaw), sp = Math.abs(car.wheelV);
+        acc += dt * o.rate(sp);
+        while (acc >= 1) {
+          acc -= 1;
+          const [wx, wz] = w[2 + (next & 1)], back = -(0.15 + Math.random() * 0.3) * car.wheelV, side = (Math.random() - 0.5) * 190 + car.vl * o.sideK;
+          fx.puff(wx, groundH(wx, wz) + 6, wz, back * c + side * s, o.up + Math.random() * 0.3 * sp, -back * s + side * c, 4.5 + Math.random() * 7);
+        }
+        // 자국: 뒷바퀴 둘이 지나간 자리의 띠. 떠 있거나 marking()이 아니면 끊긴다
+        const cur = [2, 3].map(i => [[w[i][0] - s * 13, w[i][1] - c * 13], [w[i][0] + s * 13, w[i][1] + c * 13]]);
+        if (!o.marking()) last = null;
+        else if (!last) last = cur;
+        else {
+          const d = Math.hypot(cur[0][0][0] - last[0][0][0], cur[0][0][1] - last[0][0][1]);
+          if (d >= 220) last = cur;
+          else if (d >= 30) {
+            for (let k = 0; k < 2; k++) {
+              const q = (tq++ % TQ) * 12;
+              [last[k][0], last[k][1], cur[k][0], cur[k][1]].forEach(([x, z], j) => { tpos[q + j * 3] = x; tpos[q + j * 3 + 1] = groundH(x, z) + 1.6; tpos[q + j * 3 + 2] = z; });
+            }
+            tg.attributes.position.needsUpdate = true;
+            last = cur;
+          }
+        }
+      } else last = null;
+      const grav = o.g || PH.g;
+      for (let i = 0; i < N; i++) {
+        if (life[i] <= 0) continue;
+        const q = i * 3;
+        v[q + 1] -= grav * dt;
+        p[q] += v[q] * dt; p[q + 1] += v[q + 1] * dt; p[q + 2] += v[q + 2] * dt;
+        life[i] -= dt * 0.9;
+        if (life[i] <= 0 || (v[q + 1] < 0 && p[q + 1] < groundH(p[q], p[q + 2]))) { life[i] = 0; bits.setMatrixAt(i, zero); continue; }
+        const k = size[i] * Math.min(1, life[i] * 2.2);
+        bits.setMatrixAt(i, mat4.makeScale(k, k * 0.7, k).setPosition(p[q], p[q + 1], p[q + 2]));
+      }
+      bits.instanceMatrix.needsUpdate = true;
+    },
+  };
+  return fx;
+}
+
 /* ================= 충돌 격자 ================= */
 const CELL = 1000;
 const grid = new Map();
@@ -475,8 +546,10 @@ function physicsStep(dt) {
   // 명령
   let steerCmd = input.steer, thrCmd = input.thr;
   if (state.drive !== 'user') steerCmd = autopilotSteer();
-  if (state.drive === 'local' || state.constant) thrCmd = state.drive === 'local' ? (world.aiThr || 1) : 1;
-  const u = thrCmd * state.maxThr;
+  if (state.drive === 'local' || state.constant) thrCmd = 1;
+  let u = thrCmd * state.maxThr;
+  // AI 데모를 천천히 달리게 하는 맵(aiThr, 예: 얼음): 정지 구간(0.42) 위의 쓸 수 있는 범위에서 그 비율만큼. 최대 속도를 낮게 골라도 기어가지 않게
+  if (state.drive === 'local' && world.aiThr) u = 0.42 + Math.max(0, state.maxThr - 0.42) * world.aiThr;
   car.u = u;
   car.steerCmd = steerCmd;
   // 조향 (서보 속도 제한)
